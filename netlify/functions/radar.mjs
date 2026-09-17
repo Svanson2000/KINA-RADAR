@@ -1,4 +1,5 @@
 const MARKETS = ["BE", "NL", "FR"];
+const CURRENT_YEAR = new Date().getUTCFullYear();
 
 async function getSpotifyToken() {
   const id = process.env.SPOTIFY_CLIENT_ID;
@@ -23,104 +24,243 @@ async function getSpotifyToken() {
     throw new Error(`Spotify token fout: ${r.status}`);
   }
 
-  return (await r.json()).access_token;
+  const data = await r.json();
+  return data.access_token;
+}
+
+async function spotifySearch(token, market, query, offset = 0) {
+  const url =
+    "https://api.spotify.com/v1/search?" +
+    new URLSearchParams({
+      q: query,
+      type: "track",
+      market,
+      limit: "10",
+      offset: String(offset)
+    });
+
+  const r = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+
+  if (!r.ok) return [];
+
+  const data = await r.json();
+  return data.tracks?.items || [];
 }
 
 async function searchMarket(token, market) {
   const queries = [
-    "year:2026",
+    `year:${CURRENT_YEAR}`,
+    `year:${CURRENT_YEAR - 1}`,
     "tag:new"
   ];
 
-  const results = [];
+  const offsets = [0, 10, 20];
 
-  for (const q of queries) {
-    const url =
-      "https://api.spotify.com/v1/search?" +
-      new URLSearchParams({
-        q,
-        type: "track",
+  const found = [];
+
+  for (const query of queries) {
+    for (const offset of offsets) {
+      const items = await spotifySearch(
+        token,
         market,
-        limit: "10"
-      });
+        query,
+        offset
+      );
 
-    const r = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${token}`
+      for (const t of items) {
+        if (!t?.id) continue;
+
+        found.push({
+          id: t.id,
+          title: t.name,
+          artist: (t.artists || [])
+            .map(a => a.name)
+            .join(" x "),
+          country: market,
+          spotifyUrl: t.external_urls?.spotify || null,
+          image: t.album?.images?.[0]?.url || null,
+          releaseDate: t.album?.release_date || null
+        });
       }
-    });
-
-    if (!r.ok) continue;
-
-    const data = await r.json();
-
-    for (const t of data.tracks?.items || []) {
-      results.push({
-        id: t.id,
-        title: t.name,
-        artist: (t.artists || []).map(a => a.name).join(" x "),
-        country: market,
-        spotifyUrl: t.external_urls?.spotify || null,
-        image: t.album?.images?.[0]?.url || null,
-        releaseDate: t.album?.release_date || null
-      });
     }
   }
 
-  return results;
+  return found;
+}
+
+function daysOld(date) {
+  if (!date) return 9999;
+
+  const released = new Date(date);
+  const now = new Date();
+
+  const difference = now - released;
+
+  return Math.max(
+    0,
+    Math.floor(difference / 86400000)
+  );
+}
+
+function calculateScore(track) {
+  const age = daysOld(track.releaseDate);
+
+  let freshness = 0;
+
+  if (age <= 14) freshness = 30;
+  else if (age <= 30) freshness = 25;
+  else if (age <= 60) freshness = 20;
+  else if (age <= 120) freshness = 15;
+  else if (age <= 365) freshness = 8;
+
+  const marketScore =
+    Math.min(3, track.countries.length) * 15;
+
+  const discoveryScore =
+    Math.min(20, track.appearances * 4);
+
+  return Math.min(
+    100,
+    25 +
+      freshness +
+      marketScore +
+      discoveryScore
+  );
+}
+
+function classifyTrack(track) {
+  const age = daysOld(track.releaseDate);
+
+  if (track.score >= 85 && age <= 60) {
+    return "HOT NOW";
+  }
+
+  if (
+    track.score >= 70 &&
+    age <= 120
+  ) {
+    return "BREAKOUT";
+  }
+
+  return "RADAR";
 }
 
 export default async () => {
   try {
     const token = await getSpotifyToken();
 
-    const marketResults = await Promise.all(
-      MARKETS.map(m => searchMarket(token, m))
+    const results = await Promise.all(
+      MARKETS.map(market =>
+        searchMarket(token, market)
+      )
     );
 
     const combined = new Map();
 
-    for (const tracks of marketResults) {
-      for (const track of tracks) {
-        if (!track.id) continue;
-
+    for (const marketTracks of results) {
+      for (const track of marketTracks) {
         if (!combined.has(track.id)) {
           combined.set(track.id, {
-            ...track,
+            id: track.id,
+            title: track.title,
+            artist: track.artist,
+            spotifyUrl: track.spotifyUrl,
+            image: track.image,
+            releaseDate: track.releaseDate,
             countries: [track.country],
             appearances: 1
           });
         } else {
-          const old = combined.get(track.id);
+          const existing = combined.get(track.id);
 
-          if (!old.countries.includes(track.country)) {
-            old.countries.push(track.country);
-            old.appearances++;
+          existing.appearances++;
+
+          if (
+            !existing.countries.includes(
+              track.country
+            )
+          ) {
+            existing.countries.push(
+              track.country
+            );
           }
         }
       }
     }
 
-    const tracks = [...combined.values()]
-      .map(t => ({
-        title: t.title,
-        artist: t.artist,
-        countries: t.countries,
-        chart: Math.min(100, 55 + t.appearances * 15),
-        momentum: t.appearances * 5,
-        score: Math.min(100, 60 + t.appearances * 10),
-        spotifyUrl: t.spotifyUrl,
-        image: t.image,
-        releaseDate: t.releaseDate
-      }))
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 30);
+    let tracks = [...combined.values()];
+
+    tracks = tracks
+      .map(track => {
+        const score = calculateScore(track);
+
+        const enriched = {
+          ...track,
+          score
+        };
+
+        return {
+          ...enriched,
+          category: classifyTrack(enriched),
+
+          chart: Math.min(
+            100,
+            50 +
+              enriched.countries.length * 10 +
+              enriched.appearances * 2
+          ),
+
+          momentum: Math.min(
+            100,
+            enriched.appearances * 5
+          )
+        };
+      })
+      .sort((a, b) => {
+        if (b.score !== a.score) {
+          return b.score - a.score;
+        }
+
+        return (
+          new Date(b.releaseDate || 0) -
+          new Date(a.releaseDate || 0)
+        );
+      })
+      .slice(0, 50);
+
+    const hotNow = tracks.filter(
+      t => t.category === "HOT NOW"
+    );
+
+    const breakout = tracks.filter(
+      t => t.category === "BREAKOUT"
+    );
 
     return Response.json(
       {
+        version: "9.0",
         updated: new Date().toISOString(),
-        source: "Spotify live search",
-        tracks
+
+        source:
+          "Spotify live catalogue discovery",
+
+        disclaimer:
+          "KINA Score is een eigen discovery-score en geen officiële Spotify-hitlijst.",
+
+        stats: {
+          candidates: combined.size,
+          tracks: tracks.length,
+          hotNow: hotNow.length,
+          breakout: breakout.length
+        },
+
+        tracks,
+        hotNow,
+        breakout
       },
       {
         headers: {
@@ -131,8 +271,11 @@ export default async () => {
   } catch (error) {
     return Response.json(
       {
+        version: "9.0",
         error: error.message,
-        tracks: []
+        tracks: [],
+        hotNow: [],
+        breakout: []
       },
       {
         status: 500,
