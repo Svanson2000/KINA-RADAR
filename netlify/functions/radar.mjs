@@ -40,21 +40,22 @@ async function getSpotifyToken() {
 }
 
 async function spotifySearch(token, market, query, offset) {
-  const url =
-    "https://api.spotify.com/v1/search?" +
-    new URLSearchParams({
-      q: query,
-      type: "track",
-      market,
-      limit: "10",
-      offset: String(offset)
-    });
-
-  const response = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${token}`
-    }
+  const params = new URLSearchParams({
+    q: query,
+    type: "track",
+    market,
+    limit: "10",
+    offset: String(offset)
   });
+
+  const response = await fetch(
+    `https://api.spotify.com/v1/search?${params}`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    }
+  );
 
   if (!response.ok) return [];
 
@@ -112,144 +113,114 @@ async function getFranceChart(origin) {
 
     const data = await response.json();
 
-    if (!data.success || !Array.isArray(data.tracks)) {
-      return [];
-    }
-
-    return data.tracks;
+    return Array.isArray(data.tracks)
+      ? data.tracks
+      : [];
   } catch {
     return [];
   }
 }
 
-function find      market,
-      limit: "10",
-      offset: String(offset)
-    });
+function findFranceMatch(track, chart) {
+  const title = normalize(track.title);
+  const artist = normalize(track.artist);
 
-  const r = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${token}`
-    }
-  });
+  return chart.find(item => {
+    const chartTitle = normalize(item.title);
+    const chartArtist = normalize(item.artist);
 
-  if (!r.ok) return [];
+    const titleMatch =
+      title === chartTitle ||
+      title.includes(chartTitle) ||
+      chartTitle.includes(title);
 
-  const data = await r.json();
-  return data.tracks?.items || [];
-}
+    const artistMatch =
+      artist.includes(chartArtist) ||
+      chartArtist.includes(artist);
 
-async function searchMarket(token, market) {
-  const queries = [
-    `year:${CURRENT_YEAR}`,
-    `year:${CURRENT_YEAR - 1}`,
-    "tag:new"
-  ];
-
-  const offsets = [0, 10, 20];
-
-  const found = [];
-
-  for (const query of queries) {
-    for (const offset of offsets) {
-      const items = await spotifySearch(
-        token,
-        market,
-        query,
-        offset
-      );
-
-      for (const t of items) {
-        if (!t?.id) continue;
-
-        found.push({
-          id: t.id,
-          title: t.name,
-          artist: (t.artists || [])
-            .map(a => a.name)
-            .join(" x "),
-          country: market,
-          spotifyUrl: t.external_urls?.spotify || null,
-          image: t.album?.images?.[0]?.url || null,
-          releaseDate: t.album?.release_date || null
-        });
-      }
-    }
-  }
-
-  return found;
+    return titleMatch && artistMatch;
+  }) || null;
 }
 
 function daysOld(date) {
   if (!date) return 9999;
 
-  const released = new Date(date);
-  const now = new Date();
-
-  const difference = now - released;
-
   return Math.max(
     0,
-    Math.floor(difference / 86400000)
+    Math.floor(
+      (Date.now() - new Date(date).getTime()) / 86400000
+    )
   );
 }
 
-function calculateScore(track) {
+function calculateScore(track, france) {
   const age = daysOld(track.releaseDate);
+  let score = 25;
 
-  let freshness = 0;
+  if (age <= 14) score += 30;
+  else if (age <= 30) score += 25;
+  else if (age <= 60) score += 20;
+  else if (age <= 120) score += 15;
+  else if (age <= 365) score += 8;
 
-  if (age <= 14) freshness = 30;
-  else if (age <= 30) freshness = 25;
-  else if (age <= 60) freshness = 20;
-  else if (age <= 120) freshness = 15;
-  else if (age <= 365) freshness = 8;
+  score += Math.min(45, track.countries.length * 15);
+  score += Math.min(20, track.appearances * 4);
 
-  const marketScore =
-    Math.min(3, track.countries.length) * 15;
+  if (france) {
+    score += 10;
 
-  const discoveryScore =
-    Math.min(20, track.appearances * 4);
+    if (france.position <= 5) score += 10;
+    else if (france.position <= 10) score += 7;
+    else score += 4;
 
-  return Math.min(
-    100,
-    25 +
-      freshness +
-      marketScore +
-      discoveryScore
-  );
+    if (france.change >= 10) score += 10;
+    else if (france.change >= 5) score += 7;
+    else if (france.change >= 2) score += 4;
+    else if (france.change > 0) score += 2;
+  }
+
+  return Math.min(100, score);
 }
 
-function classifyTrack(track) {
+function classify(track) {
   const age = daysOld(track.releaseDate);
+
+  if (
+    track.franceChange !== null &&
+    track.franceChange >= 5
+  ) {
+    return "BREAKOUT";
+  }
 
   if (track.score >= 85 && age <= 60) {
     return "HOT NOW";
   }
 
-  if (
-    track.score >= 70 &&
-    age <= 120
-  ) {
+  if (track.score >= 70 && age <= 120) {
     return "BREAKOUT";
   }
 
   return "RADAR";
 }
 
-export default async () => {
+export default async request => {
   try {
     const token = await getSpotifyToken();
+    const origin = new URL(request.url).origin;
 
-    const results = await Promise.all(
-      MARKETS.map(market =>
-        searchMarket(token, market)
-      )
-    );
+    const [marketResults, franceChart] =
+      await Promise.all([
+        Promise.all(
+          MARKETS.map(market =>
+            searchMarket(token, market)
+          )
+        ),
+        getFranceChart(origin)
+      ]);
 
     const combined = new Map();
 
-    for (const marketTracks of results) {
+    for (const marketTracks of marketResults) {
       for (const track of marketTracks) {
         if (!combined.has(track.id)) {
           combined.set(track.id, {
@@ -267,110 +238,89 @@ export default async () => {
 
           existing.appearances++;
 
-          if (
-            !existing.countries.includes(
-              track.country
-            )
-          ) {
-            existing.countries.push(
-              track.country
-            );
+          if (!existing.countries.includes(track.country)) {
+            existing.countries.push(track.country);
           }
         }
       }
     }
 
-    let tracks = [...combined.values()];
+    let tracks = [...combined.values()].map(track => {
+      const france = findFranceMatch(track, franceChart);
+      const score = calculateScore(track, france);
+
+      const enriched = {
+        ...track,
+        score,
+        francePosition: france?.position ?? null,
+        franceLastWeek: france?.lastWeek ?? null,
+        franceChange: france?.change ?? null,
+        franceDirection: france?.direction ?? null,
+        franceMovement: france?.movement ?? null,
+        francePeak: france?.peak ?? null,
+        franceWeeks: france?.weeks ?? null
+      };
+
+      return {
+        ...enriched,
+        category: classify(enriched)
+      };
+    });
 
     tracks = tracks
-      .map(track => {
-        const score = calculateScore(track);
-
-        const enriched = {
-          ...track,
-          score
-        };
-
-        return {
-          ...enriched,
-          category: classifyTrack(enriched),
-
-          chart: Math.min(
-            100,
-            50 +
-              enriched.countries.length * 10 +
-              enriched.appearances * 2
-          ),
-
-          momentum: Math.min(
-            100,
-            enriched.appearances * 5
-          )
-        };
-      })
-      .sort((a, b) => {
-        if (b.score !== a.score) {
-          return b.score - a.score;
-        }
-
-        return (
-          new Date(b.releaseDate || 0) -
-          new Date(a.releaseDate || 0)
-        );
-      })
+      .sort((a, b) => b.score - a.score)
       .slice(0, 50);
 
     const hotNow = tracks.filter(
-      t => t.category === "HOT NOW"
+      track => track.category === "HOT NOW"
     );
 
     const breakout = tracks.filter(
-      t => t.category === "BREAKOUT"
+      track => track.category === "BREAKOUT"
     );
 
-    return Response.json(
-      {
-        version: "9.0",
-        updated: new Date().toISOString(),
+    return Response.json({
+      version: "9.2",
+      updated: new Date().toISOString(),
 
-        source:
-          "Spotify live catalogue discovery",
+      source:
+        "Spotify catalogue discovery + France chart",
 
-        disclaimer:
-          "KINA Score is een eigen discovery-score en geen officiële Spotify-hitlijst.",
-
-        stats: {
-          candidates: combined.size,
-          tracks: tracks.length,
-          hotNow: hotNow.length,
-          breakout: breakout.length
-        },
-
-        tracks,
-        hotNow,
-        breakout
-      },
-      {
-        headers: {
-          "cache-control": "no-store"
+      chartSources: {
+        france: {
+          active: franceChart.length > 0,
+          tracksLoaded: franceChart.length
         }
+      },
+
+      stats: {
+        candidates: combined.size,
+        tracks: tracks.length,
+        hotNow: hotNow.length,
+        breakout: breakout.length
+      },
+
+      tracks,
+      hotNow,
+      breakout
+    }, {
+      headers: {
+        "cache-control": "no-store"
       }
-    );
+    });
+
   } catch (error) {
-    return Response.json(
-      {
-        version: "9.0",
-        error: error.message,
-        tracks: [],
-        hotNow: [],
-        breakout: []
-      },
-      {
-        status: 500,
-        headers: {
-          "cache-control": "no-store"
-        }
+    return Response.json({
+      version: "9.2",
+      error: error.message,
+      tracks: [],
+      hotNow: [],
+      breakout: []
+    }, {
+      status: 500,
+      headers: {
+        "cache-control": "no-store"
       }
-    );
+    });
   }
 };
