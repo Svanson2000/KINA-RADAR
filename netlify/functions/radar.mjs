@@ -2,95 +2,68 @@ const MARKETS = ["BE", "NL", "FR"];
 const CURRENT_YEAR = new Date().getUTCFullYear();
 
 function normalize(value = "") {
-  return value
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]/g, "");
+  return value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+}
+
+function daysOld(date) {
+  const time = Date.parse(date || "");
+  if (!Number.isFinite(time)) return 9999;
+  return Math.max(0, Math.floor((Date.now() - time) / 86400000));
 }
 
 async function getSpotifyToken() {
   const id = process.env.SPOTIFY_CLIENT_ID;
   const secret = process.env.SPOTIFY_CLIENT_SECRET;
+  if (!id || !secret) throw new Error("Spotify credentials ontbreken");
 
-  if (!id || !secret) {
-    throw new Error("Spotify credentials ontbreken");
-  }
-
-  const auth = Buffer.from(`${id}:${secret}`).toString("base64");
-
-  const response = await fetch(
-    "https://accounts.spotify.com/api/token",
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Basic ${auth}`,
-        "Content-Type": "application/x-www-form-urlencoded"
-      },
-      body: "grant_type=client_credentials"
-    }
-  );
-
-  if (!response.ok) {
-    throw new Error(`Spotify token fout: ${response.status}`);
-  }
-
-  const data = await response.json();
-  return data.access_token;
-}
-
-async function spotifySearch(token, market, query, offset) {
-  const params = new URLSearchParams({
-    q: query,
-    type: "track",
-    market,
-    limit: "10",
-    offset: String(offset)
+  const response = await fetch("https://accounts.spotify.com/api/token", {
+    method: "POST",
+    headers: {
+      Authorization: `Basic ${Buffer.from(`${id}:${secret}`).toString("base64")}`,
+      "Content-Type": "application/x-www-form-urlencoded"
+    },
+    body: "grant_type=client_credentials"
   });
 
-  const response = await fetch(
-    `https://api.spotify.com/v1/search?${params}`,
-    {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    }
-  );
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`Spotify token ${response.status}: ${body.slice(0, 160)}`);
+  }
+  return (await response.json()).access_token;
+}
 
-  if (!response.ok) return [];
+async function spotifySearch(token, market, query, offset = 0) {
+  const params = new URLSearchParams({ q: query, type: "track", market, limit: "10", offset: String(offset) });
+  const response = await fetch(`https://api.spotify.com/v1/search?${params}`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    return { items: [], error: `${market} ${query} @${offset}: ${response.status} ${body.slice(0, 120)}` };
+  }
 
   const data = await response.json();
-  return data.tracks?.items || [];
+  return { items: data.tracks?.items || [], error: null };
 }
 
 async function searchMarket(token, market) {
-  const queries = [
-    `year:${CURRENT_YEAR}`,
-    `year:${CURRENT_YEAR - 1}`,
-    "tag:new"
-  ];
-
+  const queries = [`year:${CURRENT_YEAR}`, `year:${CURRENT_YEAR - 1}`, "tag:new"];
   const offsets = [0, 10, 20];
   const found = [];
+  const errors = [];
 
   for (const query of queries) {
     for (const offset of offsets) {
-      const items = await spotifySearch(
-        token,
-        market,
-        query,
-        offset
-      );
+      const result = await spotifySearch(token, market, query, offset);
+      if (result.error) errors.push(result.error);
 
-      for (const item of items) {
+      for (const item of result.items) {
         if (!item?.id) continue;
-
         found.push({
           id: item.id,
           title: item.name,
-          artist: (item.artists || [])
-            .map(a => a.name)
-            .join(", "),
+          artist: (item.artists || []).map(a => a.name).join(", "),
           country: market,
           spotifyUrl: item.external_urls?.spotify || null,
           image: item.album?.images?.[0]?.url || null,
@@ -99,107 +72,61 @@ async function searchMarket(token, market) {
       }
     }
   }
-
-  return found;
+  return { found, errors };
 }
 
 async function getFranceChart(origin) {
   try {
-    const response = await fetch(
-      `${origin}/.netlify/functions/france-chart`
-    );
-
-    if (!response.ok) return [];
-
+    const response = await fetch(`${origin}/.netlify/functions/france-chart?ts=${Date.now()}`);
     const data = await response.json();
-
-    return Array.isArray(data.tracks)
-      ? data.tracks
-      : [];
-  } catch {
-    return [];
+    return {
+      tracks: response.ok && data.success && Array.isArray(data.tracks) ? data.tracks : [],
+      error: response.ok ? (data.error || null) : `France chart HTTP ${response.status}`
+    };
+  } catch (error) {
+    return { tracks: [], error: error.message };
   }
 }
 
 function findFranceMatch(track, chart) {
   const title = normalize(track.title);
   const artist = normalize(track.artist);
-
   return chart.find(item => {
-    const chartTitle = normalize(item.title);
-    const chartArtist = normalize(item.artist);
-
-    const titleMatch =
-      title === chartTitle ||
-      title.includes(chartTitle) ||
-      chartTitle.includes(title);
-
-    const artistMatch =
-      artist.includes(chartArtist) ||
-      chartArtist.includes(artist);
-
+    const ct = normalize(item.title);
+    const ca = normalize(item.artist);
+    const titleMatch = title === ct || (ct.length > 4 && title.includes(ct)) || (title.length > 4 && ct.includes(title));
+    const artistMatch = artist === ca || (ca.length > 3 && artist.includes(ca)) || (artist.length > 3 && ca.includes(artist));
     return titleMatch && artistMatch;
   }) || null;
 }
 
-function daysOld(date) {
-  if (!date) return 9999;
-
-  return Math.max(
-    0,
-    Math.floor(
-      (Date.now() - new Date(date).getTime()) / 86400000
-    )
-  );
-}
-
-function calculateScore(track, france) {
+function scoreTrack(track, france) {
   const age = daysOld(track.releaseDate);
-  let score = 25;
+  let score = 20;
+  if (age <= 14) score += 22;
+  else if (age <= 30) score += 18;
+  else if (age <= 60) score += 14;
+  else if (age <= 120) score += 9;
+  else if (age <= 365) score += 4;
 
-  if (age <= 14) score += 30;
-  else if (age <= 30) score += 25;
-  else if (age <= 60) score += 20;
-  else if (age <= 120) score += 15;
-  else if (age <= 365) score += 8;
-
-  score += Math.min(45, track.countries.length * 15);
-  score += Math.min(20, track.appearances * 4);
+  score += Math.min(18, track.countries.length * 6);
+  score += Math.min(12, track.appearances * 2);
 
   if (france) {
-    score += 10;
-
-    if (france.position <= 5) score += 10;
-    else if (france.position <= 10) score += 7;
-    else score += 4;
-
+    score += france.position <= 5 ? 18 : france.position <= 10 ? 14 : 10;
     if (france.change >= 10) score += 10;
     else if (france.change >= 5) score += 7;
     else if (france.change >= 2) score += 4;
     else if (france.change > 0) score += 2;
   }
-
-  return Math.min(100, score);
+  return Math.min(100, Math.round(score));
 }
 
 function classify(track) {
+  if (track.franceDirection === "NEW" || (track.franceChange ?? 0) >= 5) return "BREAKOUT";
   const age = daysOld(track.releaseDate);
-
-  if (
-    track.franceChange !== null &&
-    track.franceChange >= 5
-  ) {
-    return "BREAKOUT";
-  }
-
-  if (track.score >= 85 && age <= 60) {
-    return "HOT NOW";
-  }
-
-  if (track.score >= 70 && age <= 120) {
-    return "BREAKOUT";
-  }
-
+  if (track.score >= 80 && age <= 60) return "HOT NOW";
+  if (track.score >= 65 && age <= 120) return "BREAKOUT";
   return "RADAR";
 }
 
@@ -207,51 +134,31 @@ export default async request => {
   try {
     const token = await getSpotifyToken();
     const origin = new URL(request.url).origin;
-
-    const [marketResults, franceChart] =
-      await Promise.all([
-        Promise.all(
-          MARKETS.map(market =>
-            searchMarket(token, market)
-          )
-        ),
-        getFranceChart(origin)
-      ]);
+    const [marketResults, franceResult] = await Promise.all([
+      Promise.all(MARKETS.map(market => searchMarket(token, market))),
+      getFranceChart(origin)
+    ]);
 
     const combined = new Map();
+    const spotifyErrors = marketResults.flatMap(r => r.errors);
 
-    for (const marketTracks of marketResults) {
-      for (const track of marketTracks) {
-        if (!combined.has(track.id)) {
-          combined.set(track.id, {
-            id: track.id,
-            title: track.title,
-            artist: track.artist,
-            spotifyUrl: track.spotifyUrl,
-            image: track.image,
-            releaseDate: track.releaseDate,
-            countries: [track.country],
-            appearances: 1
-          });
+    for (const result of marketResults) {
+      for (const track of result.found) {
+        const existing = combined.get(track.id);
+        if (!existing) {
+          combined.set(track.id, { ...track, countries: [track.country], appearances: 1 });
         } else {
-          const existing = combined.get(track.id);
-
-          existing.appearances++;
-
-          if (!existing.countries.includes(track.country)) {
-            existing.countries.push(track.country);
-          }
+          existing.appearances += 1;
+          if (!existing.countries.includes(track.country)) existing.countries.push(track.country);
         }
       }
     }
 
     let tracks = [...combined.values()].map(track => {
-      const france = findFranceMatch(track, franceChart);
-      const score = calculateScore(track, france);
-
+      const france = findFranceMatch(track, franceResult.tracks);
       const enriched = {
         ...track,
-        score,
+        score: scoreTrack(track, france),
         francePosition: france?.position ?? null,
         franceLastWeek: france?.lastWeek ?? null,
         franceChange: france?.change ?? null,
@@ -260,67 +167,27 @@ export default async request => {
         francePeak: france?.peak ?? null,
         franceWeeks: france?.weeks ?? null
       };
-
-      return {
-        ...enriched,
-        category: classify(enriched)
-      };
+      return { ...enriched, category: classify(enriched) };
     });
 
-    tracks = tracks
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 50);
-
-    const hotNow = tracks.filter(
-      track => track.category === "HOT NOW"
-    );
-
-    const breakout = tracks.filter(
-      track => track.category === "BREAKOUT"
-    );
+    tracks.sort((a, b) => b.score - a.score || new Date(b.releaseDate || 0) - new Date(a.releaseDate || 0));
+    tracks = tracks.slice(0, 50);
+    const hotNow = tracks.filter(t => t.category === "HOT NOW");
+    const breakout = tracks.filter(t => t.category === "BREAKOUT");
 
     return Response.json({
-      version: "9.2",
+      version: "9.3",
       updated: new Date().toISOString(),
-
-      source:
-        "Spotify catalogue discovery + France chart",
-
-      chartSources: {
-        france: {
-          active: franceChart.length > 0,
-          tracksLoaded: franceChart.length
-        }
-      },
-
-      stats: {
-        candidates: combined.size,
-        tracks: tracks.length,
-        hotNow: hotNow.length,
-        breakout: breakout.length
-      },
-
-      tracks,
-      hotNow,
-      breakout
-    }, {
-      headers: {
-        "cache-control": "no-store"
-      }
-    });
-
+      source: "Spotify catalogue discovery + France chart",
+      chartSources: { france: { active: franceResult.tracks.length > 0, tracksLoaded: franceResult.tracks.length, error: franceResult.error } },
+      diagnostics: { spotifyErrors: spotifyErrors.slice(0, 12) },
+      stats: { candidates: combined.size, tracks: tracks.length, hotNow: hotNow.length, breakout: breakout.length },
+      tracks, hotNow, breakout
+    }, { headers: { "cache-control": "no-store" } });
   } catch (error) {
-    return Response.json({
-      version: "9.2",
-      error: error.message,
-      tracks: [],
-      hotNow: [],
-      breakout: []
-    }, {
+    return Response.json({ version: "9.3", error: error.message, tracks: [], hotNow: [], breakout: [] }, {
       status: 500,
-      headers: {
-        "cache-control": "no-store"
-      }
+      headers: { "cache-control": "no-store" }
     });
   }
 };
