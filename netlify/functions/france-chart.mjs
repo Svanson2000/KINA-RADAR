@@ -9,8 +9,8 @@ function cleanText(value = "") {
     .trim();
 }
 
-function movement(position, lastWeek) {
-  if (!lastWeek || lastWeek <= 0) {
+function getMovement(position, lastWeek) {
+  if (!lastWeek) {
     return {
       change: null,
       direction: "NEW",
@@ -32,7 +32,7 @@ function movement(position, lastWeek) {
     return {
       change,
       direction: "DOWN",
-      label: `${change}`
+      label: String(change)
     };
   }
 
@@ -63,49 +63,61 @@ export default async () => {
 
     const html = await response.text();
 
-    /*
-      Official Charts gebruikt JSON-LD / HTML-data
-      op de chartpagina. We zoeken de zichtbare
-      chart-items en lezen hun velden uit.
-    */
-
     const tracks = [];
 
-    const blocks = html.match(
-      /<div[^>]+class="[^"]*(?:chart-item|chart-results-content)[^"]*"[\s\S]*?(?=<div[^>]+class="[^"]*(?:chart-item|chart-results-content)|$)/gi
-    ) || [];
+    /*
+      Zoek naar chart-items.
+      We testen eerst welke velden daadwerkelijk
+      uit de huidige HTML-structuur komen.
+    */
 
-    for (const block of blocks) {
-      if (tracks.length >= 20) break;
+    const itemRegex =
+      /<div[^>]*class="[^"]*chart-item[^"]*"[^>]*>([\s\S]*?)(?=<div[^>]*class="[^"]*chart-item|$)/gi;
+
+    let match;
+
+    while (
+      (match = itemRegex.exec(html)) !== null &&
+      tracks.length < 20
+    ) {
+      const block = match[1];
 
       const positionMatch =
-        block.match(/(?:position|chart-position)[^>]*>\s*(\d{1,3})\s*</i) ||
-        block.match(/Number\s*(\d{1,3})/i);
+        block.match(
+          /class="[^"]*(?:position|chart-position)[^"]*"[^>]*>\s*(\d{1,3})/i
+        );
 
       const lastWeekMatch =
-        block.match(/LW:\s*(\d{1,3}|-)/i);
+        block.match(
+          /LW[^0-9-]*(\d{1,3}|-)/i
+        );
 
       const peakMatch =
-        block.match(/Peak:\s*(\d{1,3})/i);
+        block.match(
+          /Peak[^0-9]*(\d{1,3})/i
+        );
 
       const weeksMatch =
-        block.match(/Weeks:\s*(\d{1,3})/i);
+        block.match(
+          /Weeks[^0-9]*(\d{1,3})/i
+        );
 
       const titleMatch =
         block.match(
-          /<(?:a|h2|h3)[^>]*(?:title|track|chart-name)[^>]*>([\s\S]*?)<\/(?:a|h2|h3)>/i
+          /<(?:h2|h3|a)[^>]*class="[^"]*(?:title|track|name)[^"]*"[^>]*>([\s\S]*?)<\/(?:h2|h3|a)>/i
         );
 
       const artistMatch =
         block.match(
-          /<(?:a|div|span|p)[^>]*(?:artist)[^>]*>([\s\S]*?)<\/(?:a|div|span|p)>/i
+          /<(?:div|span|p|a)[^>]*class="[^"]*artist[^"]*"[^>]*>([\s\S]*?)<\/(?:div|span|p|a)>/i
         );
 
       if (!positionMatch || !titleMatch) {
         continue;
       }
 
-      const position = Number(positionMatch[1]);
+      const position =
+        Number(positionMatch[1]);
 
       const lastWeek =
         lastWeekMatch &&
@@ -114,19 +126,24 @@ export default async () => {
           : null;
 
       const peak =
-        peakMatch ? Number(peakMatch[1]) : null;
+        peakMatch
+          ? Number(peakMatch[1])
+          : null;
 
       const weeks =
-        weeksMatch ? Number(weeksMatch[1]) : null;
+        weeksMatch
+          ? Number(weeksMatch[1])
+          : null;
 
-      const move = movement(position, lastWeek);
+      const movement =
+        getMovement(position, lastWeek);
 
       tracks.push({
         position,
         lastWeek,
-        change: move.change,
-        direction: move.direction,
-        movement: move.label,
+        change: movement.change,
+        direction: movement.direction,
+        movement: movement.label,
         peak,
         weeks,
         title: cleanText(titleMatch[1]),
@@ -141,9 +158,9 @@ export default async () => {
         version: "9.1",
         country: "FR",
         source: "Official Charts / French Singles",
-        sourceUrl: url,
         fetchedAt: new Date().toISOString(),
         success: true,
+        htmlLength: html.length,
         count: tracks.length,
         tracks
       },
@@ -162,38 +179,6 @@ export default async () => {
         success: false,
         error: error.message,
         tracks: []
-      },
-      {
-        status: 500,
-        headers: {
-          "cache-control": "no-store"
-        }
-      }
-    );
-  }
-};          frenchSingles:
-            html.toLowerCase().includes("french singles"),
-
-          position:
-            html.toLowerCase().includes("position")
-        }
-      },
-      {
-        headers: {
-          "cache-control": "no-store"
-        }
-      }
-    );
-
-  } catch (error) {
-
-    return Response.json(
-      {
-        version: "9.1-test",
-        source: "Official Charts / French Singles",
-        country: "FR",
-        success: false,
-        error: error.message
       },
       {
         status: 500,
