@@ -1,1 +1,632 @@
-<!doctype html><html lang="nl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>KINA RADAR</title><style>body{font-family:-apple-system,sans-serif;background:#0b0d12;color:#fff;margin:0}main{max-width:1000px;margin:auto;padding:28px}.panel{background:#141820;border:1px solid #29303b;border-radius:18px;padding:18px;margin-top:18px}button,a{background:#202631;color:#fff;border:1px solid #384150;border-radius:999px;padding:10px 14px;text-decoration:none}.spotify{background:#176b42}.track{display:grid;grid-template-columns:45px 1fr auto;padding:13px 0;border-top:1px solid #29303b}.muted{color:#9aa5b4}</style></head><body><main><h1>🎧 KINA RADAR</h1><p class="muted">BE • NL • FR muziek radar</p><a class="spotify" href="/.netlify/functions/spotify-login">Koppel Spotify</a> <button onclick="load()">Vernieuw</button><div class="panel"><div id="spotify">Spotify controleren…</div><div id="status" class="muted">Radar laden…</div></div><div class="panel" id="list"></div></main><script>async function load(){try{let r=await fetch("/.netlify/functions/radar",{cache:"no-store"}),d=await r.json();status.textContent="Radar online • "+new Date(d.updated).toLocaleString("nl-BE");list.innerHTML=d.tracks.map((t,i)=>`<div class="track"><b>${i+1}</b><div><b>${t.title}</b><div class="muted">${t.artist} • ${t.countries.join(" / ")}</div></div><b>${t.score}</b></div>`).join("")}catch(e){status.textContent="Backendfout: "+e.message}try{let r=await fetch("/.netlify/functions/spotify-status",{cache:"no-store"}),d=await r.json();spotify.textContent=d.connected?"Spotify gekoppeld ✓ • "+d.display_name:"Spotify nog niet gekoppeld"}catch(e){spotify.textContent="Spotify-status niet beschikbaar"}}load()</script></body></html>
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#07080b">
+
+<title>KINA RADAR v9.0</title>
+
+<style>
+*{box-sizing:border-box}
+
+:root{
+  --bg:#07080b;
+  --card:#111318;
+  --card2:#181b21;
+  --text:#fff;
+  --muted:#8c929e;
+  --green:#1ed760;
+  --border:#252932;
+}
+
+body{
+  margin:0;
+  background:
+    radial-gradient(circle at top,#171b22 0,#090a0d 35%,#050608 75%);
+  color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+  min-height:100vh;
+}
+
+.app{
+  width:min(1100px,100%);
+  margin:auto;
+  padding:28px 18px 70px;
+}
+
+/* HEADER */
+
+.header{
+  margin-bottom:25px;
+}
+
+.brand{
+  display:flex;
+  align-items:center;
+  gap:12px;
+}
+
+.logo{
+  width:48px;
+  height:48px;
+  border-radius:50%;
+  display:grid;
+  place-items:center;
+  font-size:23px;
+  background:#111;
+  border:1px solid #30343c;
+}
+
+h1{
+  margin:0;
+  font-size:30px;
+  letter-spacing:-1px;
+}
+
+.version{
+  color:var(--green);
+  font-size:12px;
+  font-weight:800;
+  letter-spacing:1px;
+}
+
+.subtitle{
+  margin:6px 0 0 60px;
+  color:var(--muted);
+  font-size:14px;
+}
+
+/* STATUS */
+
+.statusbar{
+  margin-top:22px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:10px;
+  flex-wrap:wrap;
+}
+
+.status{
+  color:var(--muted);
+  font-size:13px;
+}
+
+.refresh{
+  border:0;
+  background:var(--green);
+  color:#051208;
+  padding:10px 17px;
+  border-radius:999px;
+  font-weight:800;
+  cursor:pointer;
+}
+
+/* STATS */
+
+.stats{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:10px;
+  margin:20px 0;
+}
+
+.stat{
+  background:rgba(18,20,25,.88);
+  border:1px solid var(--border);
+  border-radius:16px;
+  padding:15px;
+}
+
+.stat strong{
+  display:block;
+  font-size:24px;
+}
+
+.stat span{
+  color:var(--muted);
+  font-size:12px;
+}
+
+/* FILTERS */
+
+.filters{
+  display:flex;
+  gap:8px;
+  overflow-x:auto;
+  padding:3px 0 16px;
+}
+
+.filter{
+  flex:none;
+  background:#14171c;
+  color:#aaa;
+  border:1px solid #282c34;
+  border-radius:999px;
+  padding:9px 17px;
+  cursor:pointer;
+  font-weight:750;
+}
+
+.filter.active{
+  background:#fff;
+  color:#000;
+  border-color:#fff;
+}
+
+/* SECTION */
+
+.sectionTitle{
+  display:flex;
+  justify-content:space-between;
+  align-items:end;
+  margin:22px 0 12px;
+}
+
+.sectionTitle h2{
+  margin:0;
+  font-size:21px;
+}
+
+.sectionTitle span{
+  color:var(--muted);
+  font-size:12px;
+}
+
+/* TRACK */
+
+.track{
+  display:grid;
+  grid-template-columns:42px 58px 1fr auto;
+  gap:12px;
+  align-items:center;
+  padding:11px;
+  margin-bottom:8px;
+  border:1px solid var(--border);
+  background:rgba(16,18,23,.9);
+  border-radius:15px;
+  transition:.15s;
+}
+
+.track:hover{
+  background:#171a20;
+  transform:translateY(-1px);
+}
+
+.rank{
+  text-align:center;
+  color:#747b87;
+  font-size:15px;
+  font-weight:800;
+}
+
+.cover{
+  width:58px;
+  height:58px;
+  border-radius:9px;
+  object-fit:cover;
+  background:#222;
+}
+
+.info{
+  min-width:0;
+}
+
+.title{
+  font-weight:800;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+.artist{
+  margin-top:4px;
+  color:#9ba0aa;
+  font-size:13px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+.meta{
+  display:flex;
+  gap:6px;
+  flex-wrap:wrap;
+  margin-top:7px;
+}
+
+.badge{
+  padding:3px 7px;
+  border-radius:6px;
+  background:#22262d;
+  color:#adb3bd;
+  font-size:10px;
+  font-weight:800;
+}
+
+.hot{
+  background:#351411;
+  color:#ff725f;
+}
+
+.breakout{
+  background:#10271c;
+  color:#55e993;
+}
+
+/* SCORE */
+
+.right{
+  display:flex;
+  align-items:center;
+  gap:12px;
+}
+
+.score{
+  text-align:center;
+  min-width:48px;
+}
+
+.score strong{
+  display:block;
+  font-size:19px;
+}
+
+.score span{
+  color:#777e89;
+  font-size:9px;
+  font-weight:800;
+}
+
+.spotify{
+  text-decoration:none;
+  width:36px;
+  height:36px;
+  border-radius:50%;
+  display:grid;
+  place-items:center;
+  background:var(--green);
+  color:#07120a;
+  font-weight:900;
+}
+
+/* EMPTY */
+
+.empty{
+  padding:25px;
+  text-align:center;
+  color:#777;
+  border:1px dashed #292d35;
+  border-radius:15px;
+}
+
+/* MOBILE */
+
+@media(max-width:600px){
+
+  .app{
+    padding:22px 12px 60px;
+  }
+
+  h1{
+    font-size:25px;
+  }
+
+  .subtitle{
+    margin-left:0;
+    margin-top:10px;
+  }
+
+  .track{
+    grid-template-columns:30px 52px 1fr;
+  }
+
+  .cover{
+    width:52px;
+    height:52px;
+  }
+
+  .right{
+    grid-column:3;
+    justify-content:flex-start;
+  }
+
+  .stats{
+    grid-template-columns:repeat(3,1fr);
+  }
+
+  .stat{
+    padding:12px 8px;
+  }
+
+  .stat strong{
+    font-size:20px;
+  }
+}
+</style>
+</head>
+
+<body>
+
+<div class="app">
+
+  <header class="header">
+
+    <div class="brand">
+      <div class="logo">📡</div>
+
+      <div>
+        <h1>KINA RADAR</h1>
+        <div class="version">VERSION 9.0</div>
+      </div>
+    </div>
+
+    <div class="subtitle">
+      BE • NL • FR MUSIC DISCOVERY
+    </div>
+
+    <div class="statusbar">
+      <div id="status" class="status">
+        Radar wordt geladen...
+      </div>
+
+      <button class="refresh" onclick="loadRadar()">
+        ↻ Vernieuw
+      </button>
+    </div>
+
+  </header>
+
+  <div class="stats">
+
+    <div class="stat">
+      <strong id="total">0</strong>
+      <span>TOP RADAR</span>
+    </div>
+
+    <div class="stat">
+      <strong id="hotCount">0</strong>
+      <span>🔥 HOT NOW</span>
+    </div>
+
+    <div class="stat">
+      <strong id="breakCount">0</strong>
+      <span>🚀 BREAKOUT</span>
+    </div>
+
+  </div>
+
+  <div class="filters">
+
+    <button class="filter active" data-country="ALL">
+      ALL
+    </button>
+
+    <button class="filter" data-country="BE">
+      🇧🇪 BELGIË
+    </button>
+
+    <button class="filter" data-country="NL">
+      🇳🇱 NEDERLAND
+    </button>
+
+    <button class="filter" data-country="FR">
+      🇫🇷 FRANKRIJK
+    </button>
+
+  </div>
+
+  <div class="sectionTitle">
+    <h2 id="listTitle">📡 TOP 50</h2>
+    <span>KINA SCORE</span>
+  </div>
+
+  <div id="tracks"></div>
+
+</div>
+
+<script>
+
+let radarTracks=[];
+let activeCountry="ALL";
+
+const escapeHtml=(value="")=>{
+  return String(value)
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;")
+    .replaceAll("'","&#039;");
+};
+
+function categoryBadge(category){
+
+  if(category==="HOT NOW"){
+    return `<span class="badge hot">🔥 HOT NOW</span>`;
+  }
+
+  if(category==="BREAKOUT"){
+    return `<span class="badge breakout">🚀 BREAKOUT</span>`;
+  }
+
+  return `<span class="badge">📡 RADAR</span>`;
+}
+
+function render(){
+
+  let tracks=radarTracks;
+
+  if(activeCountry!=="ALL"){
+    tracks=tracks.filter(track=>
+      (track.countries||[]).includes(activeCountry)
+    );
+  }
+
+  const container=document.getElementById("tracks");
+
+  document.getElementById("listTitle").textContent=
+    activeCountry==="ALL"
+      ? "📡 TOP 50"
+      : `📡 ${activeCountry} RADAR`;
+
+  if(!tracks.length){
+    container.innerHTML=
+      `<div class="empty">Geen tracks gevonden.</div>`;
+    return;
+  }
+
+  container.innerHTML=tracks.map((track,index)=>{
+
+    const countries=(track.countries||[])
+      .map(country=>`<span class="badge">${escapeHtml(country)}</span>`)
+      .join("");
+
+    const date=track.releaseDate
+      ? `<span class="badge">${escapeHtml(track.releaseDate)}</span>`
+      : "";
+
+    const cover=track.image
+      ? escapeHtml(track.image)
+      : "";
+
+    const spotify=track.spotifyUrl
+      ? `<a class="spotify"
+            href="${escapeHtml(track.spotifyUrl)}"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Open in Spotify">▶</a>`
+      : "";
+
+    return `
+      <div class="track">
+
+        <div class="rank">
+          ${index+1}
+        </div>
+
+        ${
+          cover
+          ? `<img class="cover"
+                 src="${cover}"
+                 alt=""
+                 loading="lazy">`
+          : `<div class="cover"></div>`
+        }
+
+        <div class="info">
+
+          <div class="title">
+            ${escapeHtml(track.title)}
+          </div>
+
+          <div class="artist">
+            ${escapeHtml(track.artist)}
+          </div>
+
+          <div class="meta">
+            ${categoryBadge(track.category)}
+            ${countries}
+            ${date}
+          </div>
+
+        </div>
+
+        <div class="right">
+
+          <div class="score">
+            <strong>${Number(track.score)||0}</strong>
+            <span>KINA</span>
+          </div>
+
+          ${spotify}
+
+        </div>
+
+      </div>
+    `;
+  }).join("");
+}
+
+async function loadRadar(){
+
+  const status=document.getElementById("status");
+
+  status.textContent="Spotify radar wordt gescand...";
+
+  try{
+
+    const response=await fetch(
+      "/.netlify/functions/radar?ts="+Date.now(),
+      {cache:"no-store"}
+    );
+
+    const data=await response.json();
+
+    if(!response.ok){
+      throw new Error(
+        data.error || "Radar kon niet geladen worden"
+      );
+    }
+
+    radarTracks=data.tracks||[];
+
+    document.getElementById("total").textContent=
+      radarTracks.length;
+
+    document.getElementById("hotCount").textContent=
+      radarTracks.filter(
+        track=>track.category==="HOT NOW"
+      ).length;
+
+    document.getElementById("breakCount").textContent=
+      radarTracks.filter(
+        track=>track.category==="BREAKOUT"
+      ).length;
+
+    const updated=data.updated
+      ? new Date(data.updated).toLocaleTimeString(
+          "nl-BE",
+          {hour:"2-digit",minute:"2-digit"}
+        )
+      : "";
+
+    status.textContent=
+      `✓ LIVE • Spotify • ${radarTracks.length} tracks`+
+      (updated ? ` • ${updated}` : "");
+
+    render();
+
+  }catch(error){
+
+    status.textContent=
+      "⚠ Radar fout: "+error.message;
+
+    document.getElementById("tracks").innerHTML=
+      `<div class="empty">
+        Radar kon niet geladen worden.
+      </div>`;
+  }
+}
+
+document.querySelectorAll(".filter").forEach(button=>{
+
+  button.addEventListener("click",()=>{
+
+    document.querySelectorAll(".filter")
+      .forEach(b=>b.classList.remove("active"));
+
+    button.classList.add("active");
+
+    activeCountry=button.dataset.country;
+
+    render();
+  });
+});
+
+loadRadar();
+
+</script>
+
+</body>
+</html>
