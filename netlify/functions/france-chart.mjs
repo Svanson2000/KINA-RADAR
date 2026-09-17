@@ -1,196 +1,375 @@
-function cleanText(value = "") {
+const MARKETS = ["BE", "NL", "FR"];
+const CURRENT_YEAR = new Date().getFullYear();
+
+function normalize(value = "") {
   return value
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&#39;/g, "'")
-    .replace(/&quot;/g, '"')
-    .replace(/&nbsp;/g, " ")
-    .replace(/&agrave;/g, "à")
-    .replace(/&Agrave;/g, "À")
-    .replace(/&eacute;/g, "é")
-    .replace(/&Eacute;/g, "É")
-    .replace(/&egrave;/g, "è")
-    .replace(/&Egrave;/g, "È")
-    .replace(/&ecirc;/g, "ê")
-    .replace(/&Ecirc;/g, "Ê")
-    .replace(/&ccedil;/g, "ç")
-    .replace(/&Ccedil;/g, "Ç")
-    .replace(/\s+/g, " ")
-    .trim();
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]/g, "");
 }
 
-function fixEncoding(value = "") {
-  const replacements = [
-    ["Ã€", "À"],
-    ["Ã‚", "Â"],
-    ["Ã‡", "Ç"],
-    ["Ãˆ", "È"],
-    ["Ã‰", "É"],
-    ["ÃŠ", "Ê"],
-    ["Ã‹", "Ë"],
-    ["ÃŽ", "Î"],
-    ["Ã”", "Ô"],
-    ["Ã™", "Ù"],
-    ["Ã›", "Û"],
-    ["Ãœ", "Ü"],
-    ["Ã¡", "á"],
-    ["Ã¢", "â"],
-    ["Ã§", "ç"],
-    ["Ã¨", "è"],
-    ["Ã©", "é"],
-    ["Ãª", "ê"],
-    ["Ã«", "ë"],
-    ["Ã®", "î"],
-    ["Ã¯", "ï"],
-    ["Ã´", "ô"],
-    ["Ã¹", "ù"],
-    ["Ã»", "û"],
-    ["Ã¼", "ü"]
-  ];
+async function getSpotifyToken() {
+  const clientId = process.env.SPOTIFY_CLIENT_ID;
+  const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
 
-  let result = value;
-
-  for (const [wrong, correct] of replacements) {
-    result = result.split(wrong).join(correct);
+  if (!clientId || !clientSecret) {
+    throw new Error("Spotify environment variables ontbreken");
   }
 
-  return result;
-}
+  const credentials = Buffer
+    .from(`${clientId}:${clientSecret}`)
+    .toString("base64");
 
-function decodeText(value = "") {
-  return fixEncoding(cleanText(value));
-}
-
-function getMovement(position, lastWeek) {
-  if (lastWeek === null) {
-    return {
-      change: null,
-      direction: "NEW",
-      label: "NEW"
-    };
-  }
-
-  const change = lastWeek - position;
-
-  if (change > 0) {
-    return {
-      change,
-      direction: "UP",
-      label: `+${change}`
-    };
-  }
-
-  if (change < 0) {
-    return {
-      change,
-      direction: "DOWN",
-      label: String(change)
-    };
-  }
-
-  return {
-    change: 0,
-    direction: "SAME",
-    label: "0"
-  };
-}
-
-export default async () => {
-  try {
-    const url =
-      "https://www.officialcharts.com/charts/french-singles-chart/";
-
-    const response = await fetch(url, {
+  const response = await fetch(
+    "https://accounts.spotify.com/api/token",
+    {
+      method: "POST",
       headers: {
-        "User-Agent": "Mozilla/5.0 KINA-RADAR/9.1",
-        "Accept": "text/html"
-      }
-    });
-
-    if (!response.ok) {
-      throw new Error(
-        `French chart HTTP ${response.status}`
-      );
+        Authorization: `Basic ${credentials}`,
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
+      body: "grant_type=client_credentials"
     }
+  );
 
-    const html = await response.text();
+  if (!response.ok) {
+    throw new Error(
+      `Spotify token error ${response.status}`
+    );
+  }
 
-    const pieces = html.split(
-      /<div[^>]*class="[^"]*\bchart-item\b[^"]*"[^>]*>/i
+  const data = await response.json();
+
+  return data.access_token;
+}
+
+async function spotifySearch(token, market, query, offset = 0) {
+  const params = new URLSearchParams({
+    q: query,
+    type: "track",
+    market,
+    limit: "10",
+    offset: String(offset)
+  });
+
+  const response = await fetch(
+    `https://api.spotify.com/v1/search?${params}`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    }
+  );
+
+  if (!response.ok) {
+    return [];
+  }
+
+  const data = await response.json();
+
+  return data.tracks?.items || [];
+}
+
+async function getFranceChart(origin) {
+  try {
+    const response = await fetch(
+      `${origin}/.netlify/functions/france-chart`
     );
 
-    const tracks = [];
-
-    for (let i = 1; i < pieces.length; i++) {
-      if (tracks.length >= 20) {
-        break;
-      }
-
-      const block = pieces[i];
-
-      const titleMatch = block.match(
-        /class="[^"]*\bchart-name\b[^"]*"[^>]*>([\s\S]*?)<\/a>/i
-      );
-
-      const artistMatch = block.match(
-        /class="[^"]*\bchart-artist\b[^"]*"[^>]*>([\s\S]*?)<\/a>/i
-      );
-
-      if (!titleMatch || !artistMatch) {
-        continue;
-      }
-
-      const lwMatch = block.match(
-        /title="Last week"[\s\S]*?LW:[\s\S]*?<span[^>]*>(\d+)<\/span>/i
-      );
-
-      const peakMatch = block.match(
-        /class="[^"]*\bpeak\b[^"]*"[\s\S]*?Peak:[\s\S]*?<span[^>]*>(\d+)<\/span>/i
-      );
-
-      const weeksMatch = block.match(
-        /class="[^"]*\bweeks\b[^"]*"[\s\S]*?Weeks:[\s\S]*?<span[^>]*>(\d+)<\/span>/i
-      );
-
-      const position = tracks.length + 1;
-
-      const lastWeek = lwMatch
-        ? Number(lwMatch[1])
-        : null;
-
-      const peak = peakMatch
-        ? Number(peakMatch[1])
-        : null;
-
-      const weeks = weeksMatch
-        ? Number(weeksMatch[1])
-        : null;
-
-      const movement = getMovement(
-        position,
-        lastWeek
-      );
-
-      tracks.push({
-        position,
-        title: decodeText(titleMatch[1]),
-        artist: decodeText(artistMatch[1]),
-        lastWeek,
-        peak,
-        weeks,
-        change: movement.change,
-        direction: movement.direction,
-        movement: movement.label
-      });
+    if (!response.ok) {
+      return [];
     }
+
+    const data = await response.json();
+
+    if (!data.success || !Array.isArray(data.tracks)) {
+      return [];
+    }
+
+    return data.tracks;
+  } catch {
+    return [];
+  }
+}
+
+function findFranceMatch(track, franceChart) {
+  const spotifyTitle = normalize(track.title);
+  const spotifyArtist = normalize(track.artist);
+
+  return franceChart.find(chartTrack => {
+    const chartTitle = normalize(chartTrack.title);
+    const chartArtist = normalize(chartTrack.artist);
+
+    const titleMatch =
+      spotifyTitle === chartTitle ||
+      spotifyTitle.includes(chartTitle) ||
+      chartTitle.includes(spotifyTitle);
+
+    const artistMatch =
+      spotifyArtist.includes(chartArtist) ||
+      chartArtist.includes(spotifyArtist);
+
+    return titleMatch && artistMatch;
+  }) || null;
+}
+
+function calculateScore(track, franceMatch) {
+  let score = 45;
+
+  const releaseDate = new Date(track.releaseDate);
+  const now = new Date();
+
+  const ageDays = Math.max(
+    0,
+    Math.floor(
+      (now - releaseDate) / (1000 * 60 * 60 * 24)
+    )
+  );
+
+  // Release freshness
+  if (ageDays <= 14) {
+    score += 20;
+  } else if (ageDays <= 30) {
+    score += 16;
+  } else if (ageDays <= 60) {
+    score += 12;
+  } else if (ageDays <= 120) {
+    score += 7;
+  }
+
+  // Beschikbaar in meerdere markten
+  if (track.countries.length === 3) {
+    score += 10;
+  } else if (track.countries.length === 2) {
+    score += 6;
+  } else {
+    score += 2;
+  }
+
+  // Verschijnt vaker in onze Spotify discovery
+  score += Math.min(track.appearances * 2, 10);
+
+  // Echte Franse chart
+  if (franceMatch) {
+    score += 12;
+
+    if (franceMatch.position <= 5) {
+      score += 10;
+    } else if (franceMatch.position <= 10) {
+      score += 7;
+    } else if (franceMatch.position <= 20) {
+      score += 4;
+    }
+
+    // Momentum
+    if (franceMatch.change >= 10) {
+      score += 10;
+    } else if (franceMatch.change >= 5) {
+      score += 7;
+    } else if (franceMatch.change >= 2) {
+      score += 4;
+    } else if (franceMatch.change > 0) {
+      score += 2;
+    }
+
+    // Nieuwe charttrack
+    if (franceMatch.direction === "NEW") {
+      score += 6;
+    }
+  }
+
+  return Math.min(100, Math.round(score));
+}
+
+function getCategory(score, releaseDate, franceMatch) {
+  const ageDays = Math.max(
+    0,
+    Math.floor(
+      (new Date() - new Date(releaseDate)) /
+      (1000 * 60 * 60 * 24)
+    )
+  );
+
+  if (
+    franceMatch &&
+    franceMatch.change >= 5
+  ) {
+    return "BREAKOUT";
+  }
+
+  if (score >= 85 && ageDays <= 60) {
+    return "HOT NOW";
+  }
+
+  if (score >= 70 && ageDays <= 120) {
+    return "BREAKOUT";
+  }
+
+  return "RADAR";
+}
+
+export default async request => {
+  try {
+    const token = await getSpotifyToken();
+
+    const origin = new URL(request.url).origin;
+
+    const franceChartPromise =
+      getFranceChart(origin);
+
+    const queries = [
+      `year:${CURRENT_YEAR}`,
+      `year:${CURRENT_YEAR - 1}`,
+      "tag:new"
+    ];
+
+    const offsets = [0, 10, 20];
+
+    const searches = [];
+
+    for (const market of MARKETS) {
+      for (const query of queries) {
+        for (const offset of offsets) {
+          searches.push(
+            spotifySearch(
+              token,
+              market,
+              query,
+              offset
+            ).then(items => ({
+              market,
+              items
+            }))
+          );
+        }
+      }
+    }
+
+    const [searchResults, franceChart] =
+      await Promise.all([
+        Promise.all(searches),
+        franceChartPromise
+      ]);
+
+    const map = new Map();
+
+    for (const result of searchResults) {
+      for (const item of result.items) {
+        if (!item?.id) {
+          continue;
+        }
+
+        if (!map.has(item.id)) {
+          map.set(item.id, {
+            id: item.id,
+            title: item.name,
+            artist:
+              item.artists
+                ?.map(artist => artist.name)
+                .join(", ") || "",
+            countries: [],
+            spotifyUrl:
+              item.external_urls?.spotify || "",
+            image:
+              item.album?.images?.[0]?.url || "",
+            releaseDate:
+              item.album?.release_date || "",
+            appearances: 0
+          });
+        }
+
+        const track = map.get(item.id);
+
+        track.appearances += 1;
+
+        if (!track.countries.includes(result.market)) {
+          track.countries.push(result.market);
+        }
+      }
+    }
+
+    let tracks = [...map.values()];
+
+    tracks = tracks.map(track => {
+      const franceMatch =
+        findFranceMatch(track, franceChart);
+
+      const score =
+        calculateScore(track, franceMatch);
+
+      const category =
+        getCategory(
+          score,
+          track.releaseDate,
+          franceMatch
+        );
+
+      return {
+        ...track,
+
+        kinaScore: score,
+        category,
+
+        chartSignals: {
+          france: Boolean(franceMatch)
+        },
+
+        francePosition:
+          franceMatch?.position ?? null,
+
+        franceLastWeek:
+          franceMatch?.lastWeek ?? null,
+
+        franceChange:
+          franceMatch?.change ?? null,
+
+        franceDirection:
+          franceMatch?.direction ?? null,
+
+        franceMovement:
+          franceMatch?.movement ?? null,
+
+        francePeak:
+          franceMatch?.peak ?? null,
+
+        franceWeeks:
+          franceMatch?.weeks ?? null
+      };
+    });
+
+    tracks.sort((a, b) => {
+      if (b.kinaScore !== a.kinaScore) {
+        return b.kinaScore - a.kinaScore;
+      }
+
+      return (
+        new Date(b.releaseDate) -
+        new Date(a.releaseDate)
+      );
+    });
+
+    tracks = tracks.slice(0, 50);
 
     return Response.json(
       {
-        version: "9.1",
-        country: "FR",
-        source: "Official Charts / French Singles",
-        fetchedAt: new Date().toISOString(),
-        success: true,
+        version: "9.2",
+        source:
+          "Spotify catalogue discovery + French chart signal",
+
+        disclaimer:
+          "KINA Score is an independent discovery score and is not an official Spotify or national chart ranking.",
+
+        fetchedAt:
+          new Date().toISOString(),
+
+        chartSources: {
+          france: {
+            active: franceChart.length > 0,
+            tracksLoaded: franceChart.length
+          }
+        },
+
         count: tracks.length,
         tracks
       },
@@ -200,14 +379,13 @@ export default async () => {
         }
       }
     );
+
   } catch (error) {
     return Response.json(
       {
-        version: "9.1",
-        country: "FR",
+        version: "9.2",
         success: false,
-        error: error.message,
-        tracks: []
+        error: error.message
       },
       {
         status: 500,
