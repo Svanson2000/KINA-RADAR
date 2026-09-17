@@ -1,40 +1,88 @@
-function cleanText(value = "") {
-  return value
-    .replace(/<[^>]*>/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&#39;/g, "'")
-    .replace(/&quot;/g, '"')
-    .replace(/&nbsp;/g, " ")
+function snippet(html, search, radius = 700) {
+  const lower = html.toLowerCase();
+  const index = lower.indexOf(search.toLowerCase());
+
+  if (index === -1) {
+    return null;
+  }
+
+  const start = Math.max(0, index - radius);
+  const end = Math.min(html.length, index + radius);
+
+  return html
+    .slice(start, end)
     .replace(/\s+/g, " ")
     .trim();
 }
 
-function getMovement(position, lastWeek) {
-  if (!lastWeek) {
-    return {
-      change: null,
-      direction: "NEW",
-      label: "NEW"
-    };
-  }
+export default async () => {
+  try {
+    const url =
+      "https://www.officialcharts.com/charts/french-singles-chart/";
 
-  const change = lastWeek - position;
+    const response = await fetch(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 KINA-RADAR/9.1",
+        "Accept": "text/html,application/xhtml+xml"
+      }
+    });
 
-  if (change > 0) {
-    return {
-      change,
-      direction: "UP",
-      label: `+${change}`
-    };
-  }
+    if (!response.ok) {
+      throw new Error(
+        `French chart antwoordde met ${response.status}`
+      );
+    }
 
-  if (change < 0) {
-    return {
-      change,
-      direction: "DOWN",
-      label: String(change)
-    };
+    const html = await response.text();
+
+    const searches = [
+      "LW",
+      "Peak",
+      "Weeks",
+      "chart-item",
+      "chart-results",
+      "position",
+      "MÉLO DÉCALÉ"
+    ];
+
+    const samples = {};
+
+    for (const term of searches) {
+      samples[term] = snippet(html, term);
+    }
+
+    return Response.json(
+      {
+        version: "9.1-debug",
+        country: "FR",
+        success: true,
+        htmlLength: html.length,
+        samples
+      },
+      {
+        headers: {
+          "cache-control": "no-store"
+        }
+      }
+    );
+
+  } catch (error) {
+    return Response.json(
+      {
+        version: "9.1-debug",
+        country: "FR",
+        success: false,
+        error: error.message
+      },
+      {
+        status: 500,
+        headers: {
+          "cache-control": "no-store"
+        }
+      }
+    );
   }
+};  }
 
   return {
     change: 0,
