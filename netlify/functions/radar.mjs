@@ -1,6 +1,14 @@
 const MARKETS = ["BE", "NL", "FR"];
 const CURRENT_YEAR = new Date().getUTCFullYear();
 
+function normalize(value = "") {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]/g, "");
+}
+
 async function getSpotifyToken() {
   const id = process.env.SPOTIFY_CLIENT_ID;
   const secret = process.env.SPOTIFY_CLIENT_SECRET;
@@ -11,30 +19,110 @@ async function getSpotifyToken() {
 
   const auth = Buffer.from(`${id}:${secret}`).toString("base64");
 
-  const r = await fetch("https://accounts.spotify.com/api/token", {
-    method: "POST",
-    headers: {
-      Authorization: `Basic ${auth}`,
-      "Content-Type": "application/x-www-form-urlencoded"
-    },
-    body: "grant_type=client_credentials"
-  });
+  const response = await fetch(
+    "https://accounts.spotify.com/api/token",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${auth}`,
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
+      body: "grant_type=client_credentials"
+    }
+  );
 
-  if (!r.ok) {
-    throw new Error(`Spotify token fout: ${r.status}`);
+  if (!response.ok) {
+    throw new Error(`Spotify token fout: ${response.status}`);
   }
 
-  const data = await r.json();
+  const data = await response.json();
   return data.access_token;
 }
 
-async function spotifySearch(token, market, query, offset = 0) {
+async function spotifySearch(token, market, query, offset) {
   const url =
     "https://api.spotify.com/v1/search?" +
     new URLSearchParams({
       q: query,
       type: "track",
       market,
+      limit: "10",
+      offset: String(offset)
+    });
+
+  const response = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+
+  if (!response.ok) return [];
+
+  const data = await response.json();
+  return data.tracks?.items || [];
+}
+
+async function searchMarket(token, market) {
+  const queries = [
+    `year:${CURRENT_YEAR}`,
+    `year:${CURRENT_YEAR - 1}`,
+    "tag:new"
+  ];
+
+  const offsets = [0, 10, 20];
+  const found = [];
+
+  for (const query of queries) {
+    for (const offset of offsets) {
+      const items = await spotifySearch(
+        token,
+        market,
+        query,
+        offset
+      );
+
+      for (const item of items) {
+        if (!item?.id) continue;
+
+        found.push({
+          id: item.id,
+          title: item.name,
+          artist: (item.artists || [])
+            .map(a => a.name)
+            .join(", "),
+          country: market,
+          spotifyUrl: item.external_urls?.spotify || null,
+          image: item.album?.images?.[0]?.url || null,
+          releaseDate: item.album?.release_date || null
+        });
+      }
+    }
+  }
+
+  return found;
+}
+
+async function getFranceChart(origin) {
+  try {
+    const response = await fetch(
+      `${origin}/.netlify/functions/france-chart`
+    );
+
+    if (!response.ok) return [];
+
+    const data = await response.json();
+
+    if (!data.success || !Array.isArray(data.tracks)) {
+      return [];
+    }
+
+    return data.tracks;
+  } catch {
+    return [];
+  }
+}
+
+function find      market,
       limit: "10",
       offset: String(offset)
     });
