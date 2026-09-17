@@ -111,8 +111,9 @@ export default async () => {
         Zoek de positie dicht bij het begin
         van het chart-item.
       */
-      const beginning = block.slice(0, 2500);
-
+const beginning = block.slice(0, 2500);
+console.log("KINA POSITION DEBUG", tracks.length + 1, beginning.slice(0, 1200));
+      
       const positionPatterns = [
         /class="[^"]*\bposition\b[^"]*"[^>]*>[\s\S]*?(\d{1,3})/i,
         /class="[^"]*\bposition-number\b[^"]*"[^>]*>[\s\S]*?(\d{1,3})/i,
