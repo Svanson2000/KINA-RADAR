@@ -1,13 +1,13 @@
-function snippet(html, search, radius = 700) {
+function getSnippet(html, term) {
   const lower = html.toLowerCase();
-  const index = lower.indexOf(search.toLowerCase());
+  const index = lower.indexOf(term.toLowerCase());
 
   if (index === -1) {
     return null;
   }
 
-  const start = Math.max(0, index - radius);
-  const end = Math.min(html.length, index + radius);
+  const start = Math.max(0, index - 500);
+  const end = Math.min(html.length, index + 1000);
 
   return html
     .slice(start, end)
@@ -23,216 +23,39 @@ export default async () => {
     const response = await fetch(url, {
       headers: {
         "User-Agent": "Mozilla/5.0 KINA-RADAR/9.1",
-        "Accept": "text/html,application/xhtml+xml"
+        "Accept": "text/html"
       }
     });
 
     if (!response.ok) {
       throw new Error(
-        `French chart antwoordde met ${response.status}`
+        `French chart HTTP ${response.status}`
       );
     }
 
     const html = await response.text();
 
-    const searches = [
-      "LW",
-      "Peak",
-      "Weeks",
-      "chart-item",
-      "chart-results",
-      "position",
-      "MÉLO DÉCALÉ"
-    ];
-
-    const samples = {};
-
-    for (const term of searches) {
-      samples[term] = snippet(html, term);
-    }
-
-    return Response.json(
-      {
-        version: "9.1-debug",
-        country: "FR",
-        success: true,
-        htmlLength: html.length,
-        samples
-      },
-      {
-        headers: {
-          "cache-control": "no-store"
-        }
+    return Response.json({
+      version: "9.1-debug",
+      success: true,
+      htmlLength: html.length,
+      samples: {
+        position: getSnippet(html, "position"),
+        peak: getSnippet(html, "Peak"),
+        weeks: getSnippet(html, "Weeks"),
+        chart: getSnippet(html, "chart-item")
       }
-    );
+    });
 
   } catch (error) {
     return Response.json(
       {
         version: "9.1-debug",
-        country: "FR",
         success: false,
         error: error.message
       },
       {
-        status: 500,
-        headers: {
-          "cache-control": "no-store"
-        }
-      }
-    );
-  }
-};  }
-
-  return {
-    change: 0,
-    direction: "SAME",
-    label: "0"
-  };
-}
-
-export default async () => {
-  try {
-    const url =
-      "https://www.officialcharts.com/charts/french-singles-chart/";
-
-    const response = await fetch(url, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 KINA-RADAR/9.1",
-        "Accept": "text/html,application/xhtml+xml"
-      }
-    });
-
-    if (!response.ok) {
-      throw new Error(
-        `French chart antwoordde met ${response.status}`
-      );
-    }
-
-    const html = await response.text();
-
-    const tracks = [];
-
-    /*
-      Zoek naar chart-items.
-      We testen eerst welke velden daadwerkelijk
-      uit de huidige HTML-structuur komen.
-    */
-
-    const itemRegex =
-      /<div[^>]*class="[^"]*chart-item[^"]*"[^>]*>([\s\S]*?)(?=<div[^>]*class="[^"]*chart-item|$)/gi;
-
-    let match;
-
-    while (
-      (match = itemRegex.exec(html)) !== null &&
-      tracks.length < 20
-    ) {
-      const block = match[1];
-
-      const positionMatch =
-        block.match(
-          /class="[^"]*(?:position|chart-position)[^"]*"[^>]*>\s*(\d{1,3})/i
-        );
-
-      const lastWeekMatch =
-        block.match(
-          /LW[^0-9-]*(\d{1,3}|-)/i
-        );
-
-      const peakMatch =
-        block.match(
-          /Peak[^0-9]*(\d{1,3})/i
-        );
-
-      const weeksMatch =
-        block.match(
-          /Weeks[^0-9]*(\d{1,3})/i
-        );
-
-      const titleMatch =
-        block.match(
-          /<(?:h2|h3|a)[^>]*class="[^"]*(?:title|track|name)[^"]*"[^>]*>([\s\S]*?)<\/(?:h2|h3|a)>/i
-        );
-
-      const artistMatch =
-        block.match(
-          /<(?:div|span|p|a)[^>]*class="[^"]*artist[^"]*"[^>]*>([\s\S]*?)<\/(?:div|span|p|a)>/i
-        );
-
-      if (!positionMatch || !titleMatch) {
-        continue;
-      }
-
-      const position =
-        Number(positionMatch[1]);
-
-      const lastWeek =
-        lastWeekMatch &&
-        lastWeekMatch[1] !== "-"
-          ? Number(lastWeekMatch[1])
-          : null;
-
-      const peak =
-        peakMatch
-          ? Number(peakMatch[1])
-          : null;
-
-      const weeks =
-        weeksMatch
-          ? Number(weeksMatch[1])
-          : null;
-
-      const movement =
-        getMovement(position, lastWeek);
-
-      tracks.push({
-        position,
-        lastWeek,
-        change: movement.change,
-        direction: movement.direction,
-        movement: movement.label,
-        peak,
-        weeks,
-        title: cleanText(titleMatch[1]),
-        artist: artistMatch
-          ? cleanText(artistMatch[1])
-          : ""
-      });
-    }
-
-    return Response.json(
-      {
-        version: "9.1",
-        country: "FR",
-        source: "Official Charts / French Singles",
-        fetchedAt: new Date().toISOString(),
-        success: true,
-        htmlLength: html.length,
-        count: tracks.length,
-        tracks
-      },
-      {
-        headers: {
-          "cache-control": "no-store"
-        }
-      }
-    );
-
-  } catch (error) {
-    return Response.json(
-      {
-        version: "9.1",
-        country: "FR",
-        success: false,
-        error: error.message,
-        tracks: []
-      },
-      {
-        status: 500,
-        headers: {
-          "cache-control": "no-store"
-        }
+        status: 500
       }
     );
   }
