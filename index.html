@@ -376,7 +376,7 @@ h1{
 
       <div>
         <h1>KINA RADAR</h1>
-        <div class="version">VERSION 16.8</div>
+        <div class="version">VERSION 16.9</div>
       </div>
     </div>
 
@@ -472,7 +472,7 @@ h1{
     <span>KINA SCORE</span>
   </div>
 
-  <div id="ultraControls" style="display:none;margin:0 0 16px"><select id="ultraYear" class="filter" style="appearance:auto"></select></div><div id="tracks"></div><div class="sectionTitle" style="margin-top:38px"><h2>🎵 TIKTOK TRENDING TOP 10</h2><span>NU TRENDING</span></div><div id="tiktok"></div><div class="sectionTitle" style="margin-top:38px"><h2>📻 TOPRADIO BELGIË TOP 20</h2><span>MEEST GESPEELD</span></div><div id="topradio"></div><div class="sectionTitle" style="margin-top:38px"><h2>📻 VERONICA NEDERLAND TOP 20</h2><span>30 DAGEN</span></div><div id="veronica"></div>
+  <div id="tracks"></div><div class="sectionTitle" style="margin-top:38px"><h2>🎵 TIKTOK TRENDING TOP 10</h2><span>NU TRENDING</span></div><div id="tiktok"></div><div class="sectionTitle" style="margin-top:38px"><h2>📻 TOPRADIO BELGIË TOP 20</h2><span>MEEST GESPEELD</span></div><div id="topradio"></div><div class="sectionTitle" style="margin-top:38px"><h2>📻 VERONICA NEDERLAND TOP 20</h2><span>30 DAGEN</span></div><div id="veronica"></div>
 
 </div>
 <div id="playerBar" class="playerBar">
@@ -501,7 +501,6 @@ let edmTracks=[];
 let afroTracks=[];
 let commercialDanceTracks=[];
 let ultratopHistoryTracks=[];
-let ultratopMonths=[];
 let ultratopYear=new Date().getFullYear();
 const previewCache=new Map();
 let playingCard=null;
@@ -640,8 +639,7 @@ function render(){
     tracks=commercialDanceTracks;
   } else if(activeCountry==="ULTRA3"){
     const c=document.getElementById("tracks");
-    document.getElementById("ultraControls").style.display="block";
-    if(!ultratopMonths.length){c.innerHTML='<div class="empty">Ultratop-archief wordt geladen…</div>';return;}
+    tracks=ultratopHistoryTracks;}
     c.innerHTML=ultratopMonths.map(m=>'<div class="sectionTitle" style="margin-top:28px"><h2>'+m.name+' '+ultratopYear+'</h2><span>WEEKLIJKSE TOP 3</span></div>'+m.tracks.map((t,i)=>'<div class="track"><div class="rank">'+t.best+'</div><div class="cover" style="display:grid;place-items:center;font-weight:900">#'+t.best+'</div><div class="info"><div class="title">'+escapeHtml(t.title)+'</div><div class="artist">'+escapeHtml(t.artist||"")+'</div><div class="meta"><span class="badge">TOP 3</span><span class="badge">'+t.weeksTop3+'× TOP 3</span></div></div><div class="right"></div></div>').join('')).join('');
     return;
   } else if(activeCountry!=="ALL"){
@@ -651,7 +649,6 @@ function render(){
   }
 
   const container=document.getElementById("tracks");
-  document.getElementById("ultraControls").style.display=activeCountry==="ULTRA3"?"block":"none";
 
   document.getElementById("listTitle").textContent=
     activeStatView==="HOT" ? "🔥 HOT NOW" :
@@ -670,7 +667,7 @@ function render(){
               : activeCountry==="COMDANCE"
                 ? "💿 COMMERCIAL DANCE TOP 40 • TOP-5 ONLY"
                 : activeCountry==="ULTRA3"
-                  ? "🇧🇪 ULTRATOP TOP 3 • "+ultratopYear
+                  ? "🇧🇪 ALLE ULTRATOP TOP 3 • 2020 → NU"
                   : `📡 ${activeCountry} RADAR`;
 
   if(!tracks.length){
@@ -822,7 +819,7 @@ document.querySelectorAll(".filter").forEach(button=>{
 
     activeCountry=button.dataset.country;
     activeStatView=null;
-    if(activeCountry==="ULTRA3")loadUltratopHistory(ultratopYear);
+    
     document.querySelectorAll(".statFilter").forEach(s=>s.classList.remove("active"));
 
     render();
@@ -857,14 +854,12 @@ function miniList(id,items){
   }).join("");
 }
 async function loadStreamingNow(){try{const r=await fetch("/.netlify/functions/streaming-now?ts="+Date.now(),{cache:"no-store"});const d=await r.json();streamingTracks=(d.tracks||[]).map(x=>({...x,score:0,category:"STREAMING",countries:["GLOBAL"]}));if(activeCountry==="STREAM")render();}catch(e){streamingTracks=[];if(activeCountry==="STREAM")render();}}
-async function loadUltratopHistory(year=new Date().getFullYear()){
-  ultratopYear=year;ultratopMonths=[];
-  if(activeCountry==="ULTRA3")render();
+async function loadUltratopHistory(){
   try{
-    const r=await fetch("/.netlify/functions/ultratop-history?year="+year,{cache:"force-cache"});
-    const d=await r.json();ultratopMonths=d.months||[];
-    ultratopHistoryTracks=ultratopMonths.flatMap(m=>m.tracks||[]);
-  }catch{ultratopMonths=[];ultratopHistoryTracks=[];}
+    const r=await fetch("/.netlify/functions/ultratop-history?ts="+Date.now(),{cache:"no-store"});
+    const d=await r.json();
+    ultratopHistoryTracks=(d.tracks||[]).map((x,i)=>({...x,score:x.peak||0,category:"ULTRATOP TOP 3",countries:["BE"],releaseDate:(x.years||[x.year]).join(", ")}));
+  }catch{ultratopHistoryTracks=[];}
   if(activeCountry==="ULTRA3")render();
 }
 async function loadCommercialDance(){
@@ -877,9 +872,6 @@ async function loadCommercialDance(){
 }
 async function loadGenreLists(){const load=async(path)=>{try{const r=await fetch("/.netlify/functions/"+path+"?ts="+Date.now(),{cache:"no-store"});const d=await r.json();return d.tracks||[]}catch{return[]}};[edmTracks,afroTracks]=await Promise.all([load("edm-now"),load("afro-now")]);if(activeCountry==="EDM"||activeCountry==="AFRO")render();}
 async function loadTrends(){try{const r=await fetch("/.netlify/functions/trends?ts="+Date.now(),{cache:"no-store"});const d=await r.json();miniList("tiktok",d.tiktok);miniList("topradio",d.topradio);miniList("veronica",d.veronica);}catch(e){["tiktok","topradio","veronica"].forEach(id=>miniList(id,[]));}}
-const ys=document.getElementById("ultraYear");
-for(let y=new Date().getFullYear();y>=2000;y--){const o=document.createElement("option");o.value=y;o.textContent=y;ys.appendChild(o)}
-ys.value=ultratopYear;ys.addEventListener("change",()=>loadUltratopHistory(+ys.value));
 loadRadar();
 loadStreamingNow();
 loadGenreLists();
