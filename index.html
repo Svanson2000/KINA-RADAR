@@ -372,7 +372,7 @@ h1{
 
       <div>
         <h1>KINA RADAR</h1>
-        <div class="version">VERSION 16.1</div>
+        <div class="version">VERSION 16.2</div>
       </div>
     </div>
 
@@ -469,7 +469,9 @@ h1{
     <div><strong id="playerTitle">Geen track</strong><span id="playerArtist">Dubbelklik op een nummer</span></div>
   </div>
   <div class="playerControls">
+    <button id="prevBtn" type="button" aria-label="Vorige">‹</button>
     <button id="pauseBtn" type="button" aria-label="Pauze of hervatten">⏸</button>
+    <button id="nextBtn" type="button" aria-label="Volgende">›</button>
     <button id="stopBtn" type="button" aria-label="Stop">■</button>
   </div>
 </div>
@@ -487,6 +489,8 @@ let edmTracks=[];
 let afroTracks=[];
 const previewCache=new Map();
 let playingCard=null;
+let playlistCards=[];
+let playlistIndex=-1;
 
 const escapeHtml=(value="")=>{
   return String(value)
@@ -518,6 +522,8 @@ async function getPreview(title,artist){
   }catch{return null}
 }
 async function playTrack(card,title,artist){
+  playlistCards=[...document.querySelectorAll("#tracks .track")];
+  playlistIndex=playlistCards.indexOf(card);
   hardStop();
   const token=++playToken, p=document.getElementById("kinaPlayer");
   const url=await getPreview(title,artist);
@@ -528,7 +534,7 @@ async function playTrack(card,title,artist){
   document.getElementById("playerBar").classList.add("visible");
   document.getElementById("pauseBtn").textContent="⏸";
   try{await p.play()}catch{}
-  p.onended=()=>{if(token===playToken){card.classList.remove("playing");playingCard=null;document.getElementById("playerBar").classList.remove("visible")}};
+  p.onended=()=>{if(token===playToken){card.classList.remove("playing");playingCard=null;playAdjacent(1)}};
 }
 let lastTap=0,lastTapCard=null;
 document.addEventListener("click",e=>{
@@ -545,6 +551,18 @@ document.addEventListener("dblclick",e=>{
   const title=card.querySelector(".title")?.textContent?.trim(),artist=card.querySelector(".artist")?.textContent?.trim();
   if(title&&artist)playTrack(card,title,artist);
 });
+async function playAdjacent(step){
+  const cards=[...document.querySelectorAll("#tracks .track")];
+  if(!cards.length)return;
+  let i=playingCard?cards.indexOf(playingCard):playlistIndex;
+  if(i<0)i=step>0?-1:0;
+  i=(i+step+cards.length)%cards.length;
+  const card=cards[i],title=card.querySelector(".title")?.textContent?.trim(),artist=card.querySelector(".artist")?.textContent?.trim();
+  playlistIndex=i;
+  if(title&&artist)await playTrack(card,title,artist);
+}
+document.getElementById("prevBtn").addEventListener("click",()=>playAdjacent(-1));
+document.getElementById("nextBtn").addEventListener("click",()=>playAdjacent(1));
 document.getElementById("pauseBtn").addEventListener("click",()=>{
   const p=document.getElementById("kinaPlayer");if(!p.src)return;
   if(p.paused){p.play().catch(()=>{});document.getElementById("pauseBtn").textContent="⏸";}
