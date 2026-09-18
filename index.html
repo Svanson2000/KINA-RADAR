@@ -193,6 +193,8 @@ h1{
   background:#171a20;
   transform:translateY(-1px);
 }
+.track{cursor:pointer}
+.track.playing{outline:2px solid var(--green);background:#142019}
 
 .rank{
   text-align:center;
@@ -358,7 +360,7 @@ h1{
 
       <div>
         <h1>KINA RADAR</h1>
-        <div class="version">VERSION 15.3</div>
+        <div class="version">VERSION 15.4</div>
       </div>
     </div>
 
@@ -449,7 +451,7 @@ h1{
   <div id="tracks"></div><div class="sectionTitle" style="margin-top:38px"><h2>🎵 TIKTOK TRENDING TOP 10</h2><span>NU TRENDING</span></div><div id="tiktok"></div><div class="sectionTitle" style="margin-top:38px"><h2>📻 TOPRADIO BELGIË TOP 20</h2><span>MEEST GESPEELD</span></div><div id="topradio"></div><div class="sectionTitle" style="margin-top:38px"><h2>📻 VERONICA NEDERLAND TOP 20</h2><span>30 DAGEN</span></div><div id="veronica"></div>
 
 </div>
-
+<audio id="kinaPlayer" preload="none"></audio>
 <script>
 
 let radarTracks=[];
@@ -458,6 +460,8 @@ let top3Mix=[];
 let streamingTracks=[];
 let edmTracks=[];
 let afroTracks=[];
+const previewCache=new Map();
+let playingCard=null;
 
 const escapeHtml=(value="")=>{
   return String(value)
@@ -468,6 +472,30 @@ const escapeHtml=(value="")=>{
     .replaceAll("'","&#039;");
 };
 
+async function playTrack(card,title,artist){
+  const player=document.getElementById("kinaPlayer"), key=(title+"|"+artist).toLowerCase();
+  try{
+    if(playingCard===card&&!player.paused){player.pause();card.classList.remove("playing");playingCard=null;return;}
+    let url=previewCache.get(key);
+    if(url===undefined){
+      const r=await fetch("https://itunes.apple.com/search?term="+encodeURIComponent(title+" "+artist)+"&entity=song&limit=5");
+      const d=await r.json();
+      const norm=s=>String(s||"").toLowerCase().replace(/[^a-z0-9]+/g," ");
+      const nt=norm(title),na=norm(artist);
+      const hit=(d.results||[]).find(x=>norm(x.trackName).includes(nt)||nt.includes(norm(x.trackName))) || (d.results||[]).find(x=>norm(x.artistName).split(" ").some(w=>w.length>3&&na.includes(w))) || d.results?.[0];
+      url=hit?.previewUrl||null; previewCache.set(key,url);
+    }
+    if(!url){card.animate([{opacity:1},{opacity:.45},{opacity:1}],{duration:350});return;}
+    if(playingCard)playingCard.classList.remove("playing");
+    player.src=url; await player.play(); playingCard=card; card.classList.add("playing");
+    player.onended=()=>{card.classList.remove("playing");playingCard=null;};
+  }catch(e){}
+}
+document.addEventListener("dblclick",e=>{
+  const card=e.target.closest(".track"); if(!card)return;
+  const title=card.querySelector(".title")?.textContent?.trim(),artist=card.querySelector(".artist")?.textContent?.trim();
+  if(title&&artist)playTrack(card,title,artist);
+});
 function categoryBadge(category){
 
   if(category==="HOT NOW"){
