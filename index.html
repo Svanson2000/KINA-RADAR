@@ -358,7 +358,7 @@ h1{
 
       <div>
         <h1>KINA RADAR</h1>
-        <div class="version">VERSION 15.1</div>
+        <div class="version">VERSION 15.3</div>
       </div>
     </div>
 
@@ -431,6 +431,14 @@ h1{
       🌍 STREAMING NOW
     </button>
 
+    <button class="filter" data-country="EDM">
+      ⚡ EDM TOP 10
+    </button>
+
+    <button class="filter" data-country="AFRO">
+      🌍 AFRO TOP 10
+    </button>
+
   </div>
 
   <div class="sectionTitle">
@@ -448,6 +456,8 @@ let radarTracks=[];
 let activeCountry="ALL";
 let top3Mix=[];
 let streamingTracks=[];
+let edmTracks=[];
+let afroTracks=[];
 
 const escapeHtml=(value="")=>{
   return String(value)
@@ -479,6 +489,10 @@ function render(){
     tracks=top3Mix;
   } else if(activeCountry==="STREAM"){
     tracks=streamingTracks;
+  } else if(activeCountry==="EDM"){
+    tracks=edmTracks;
+  } else if(activeCountry==="AFRO"){
+    tracks=afroTracks;
   } else if(activeCountry!=="ALL"){
     tracks=tracks.filter(track=>
       (track.countries||[]).includes(activeCountry)
@@ -494,7 +508,11 @@ function render(){
         ? "🏆 TOP 3 MIX"
         : activeCountry==="STREAM"
           ? "🌍 STREAMING NOW TOP 20"
-          : `📡 ${activeCountry} RADAR`;
+          : activeCountry==="EDM"
+            ? "⚡ EDM WORLD TOP 10"
+            : activeCountry==="AFRO"
+              ? "🌍 AFRO / FRANCOPHONE TOP 10"
+              : `📡 ${activeCountry} RADAR`;
 
   if(!tracks.length){
     container.innerHTML=
@@ -668,9 +686,11 @@ function miniList(id,items){
   }).join("");
 }
 async function loadStreamingNow(){try{const r=await fetch("/.netlify/functions/streaming-now?ts="+Date.now(),{cache:"no-store"});const d=await r.json();streamingTracks=(d.tracks||[]).map(x=>({...x,score:0,category:"STREAMING",countries:["GLOBAL"]}));if(activeCountry==="STREAM")render();}catch(e){streamingTracks=[];if(activeCountry==="STREAM")render();}}
+async function loadGenreLists(){const load=async(path)=>{try{const r=await fetch("/.netlify/functions/"+path+"?ts="+Date.now(),{cache:"no-store"});const d=await r.json();return d.tracks||[]}catch{return[]}};[edmTracks,afroTracks]=await Promise.all([load("edm-now"),load("afro-now")]);if(activeCountry==="EDM"||activeCountry==="AFRO")render();}
 async function loadTrends(){try{const r=await fetch("/.netlify/functions/trends?ts="+Date.now(),{cache:"no-store"});const d=await r.json();miniList("tiktok",d.tiktok);miniList("topradio",d.topradio);miniList("veronica",d.veronica);}catch(e){["tiktok","topradio","veronica"].forEach(id=>miniList(id,[]));}}
 loadRadar();
 loadStreamingNow();
+loadGenreLists();
 loadTrends();
 
 </script>
