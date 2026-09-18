@@ -376,7 +376,7 @@ h1{
 
       <div>
         <h1>KINA RADAR</h1>
-        <div class="version">VERSION 17.9</div>
+        <div class="version">VERSION 18.0</div>
       </div>
     </div>
 
@@ -502,6 +502,28 @@ let commercialDanceTracks=[];
 let billboardDancePopTracks=[];
 const DANCE_POP_SEED=[["MOVIN' TO THE SUN","HUGEL, Imael Angel & Ultra Naté"],["MAGNETIC","Bausa"],["ON 2NITE","Silva Bumpa"],["JAMAICAN (BAM BAM)","HUGEL & SOLTO"],["SHINE","HUGEL, David Guetta, French Montana & Aidan Martin"],["TAKE ME BACK","Kygo & Max McNown"],["NEW RELIGION","Bebe Rexha & Faithless"],["SILVER LINES","ANOTR & Emily Warren"],["MEET ME IN THE DARK","AVE"],["HAPPINESS IS SO SAD","Swedish House Mafia & Lykke Li"],["TALK TO YOU","ANOTR & 54 Ultra"],["GOOD GIRL","Cloonee, Prospa & Tristan Henry"],["HUMAN","David Guetta, Third Party & John Martin"],["WO, MAN","Peggy Gou & Ayra Starr"],["EDGE OF DESIRE","Jonas Blue & Malive"],["MI CHICO","DJ Goja"],["SORRY PAPI","Topic & Becky G"],["WORLD AWAY","Gryffin, BUNT. & Inéz"],["TURN THE TIDE","Dimitri Vegas, Sylver & Pat B"],["MY PLACE","Josh Baker & Poppy Baskcomb"],["HEY EVERYBODY (BACK IN THE DANCE)","Kolter"],["SATISFY","Calvin Harris & Jazzy"],["BIZARRE","Madonna & Martin Garrix"],["REPEAT IT","Martin Garrix & Ed Sheeran"],["RMB (Ring My Bell)","Aitch"],["SAD GIRLS","Bebe Rexha & David Guetta"],["WHAT A LIFE","FISHER & Florence Arman"],["IN YOUR EYES","Alesso & OneRepublic"],["COME TO LIFE","Cassian & AR/CO"],["JUST THE WAY YOU ARE","Milky & Mall Grab"]].map((x,i)=>({position:i+1,title:x[0],artist:x[1],score:i+1,category:"GLOBAL DANCE",countries:["GLOBAL"]}));
 const previewCache=new Map();
+const artworkCache=new Map();
+async function getArtwork(title,artist){
+  const key=(title+"|"+artist).toLowerCase();
+  if(artworkCache.has(key))return artworkCache.get(key);
+  try{
+    const q=encodeURIComponent(title+" "+artist);
+    const r=await fetch("https://itunes.apple.com/search?term="+q+"&entity=song&limit=5&country=BE");
+    const d=await r.json();
+    const norm=s=>String(s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g," ").trim();
+    const nt=norm(title),na=norm(artist);
+    const hit=(d.results||[]).find(x=>norm(x.trackName)===nt)||
+      (d.results||[]).find(x=>norm(x.trackName).includes(nt)||nt.includes(norm(x.trackName)))||
+      (d.results||[]).find(x=>norm(x.artistName).split(" ").some(w=>w.length>3&&na.includes(w)))||
+      d.results?.[0];
+    const image=hit?.artworkUrl100?.replace(/100x100bb/,"600x600bb").replace(/100x100/,"600x600")||"";
+    artworkCache.set(key,image);return image;
+  }catch{artworkCache.set(key,"");return ""}
+}
+async function enrichArtwork(tracks){
+  const jobs=tracks.map(async t=>{if(!t.image)t.image=await getArtwork(t.title,t.artist);return t});
+  return Promise.all(jobs);
+}
 let playingCard=null;
 let playlistCards=[];
 let playlistIndex=-1;
@@ -854,10 +876,11 @@ function miniList(id,items){
 }
 async function loadStreamingNow(){try{const d=await cachedJSON("stream","/.netlify/functions/streaming-now");streamingTracks=(d.tracks||[]).map(x=>({...x,score:0,category:"STREAMING",countries:["GLOBAL"]}));if(activeCountry==="STREAM")render();}catch{streamingTracks=[];}}
 async function loadBillboardDancePop(){
-  billboardDancePopTracks=DANCE_POP_SEED;
+  billboardDancePopTracks=DANCE_POP_SEED.map(x=>({...x}));
   if(activeCountry==="BBDANCE")render();
+  enrichArtwork(billboardDancePopTracks).then(()=>{if(activeCountry==="BBDANCE")render()});
   try{
-    const d=await cachedJSON("global-dance-pop-v179","/.netlify/functions/billboard-dance-pop");
+    const d=await cachedJSON("global-dance-pop-v180","/.netlify/functions/billboard-dance-pop");
     if((d.tracks||[]).length>=10){
       billboardDancePopTracks=d.tracks.slice(0,30).map(x=>({...x,score:x.position||0,category:"GLOBAL DANCE",countries:["GLOBAL"]}));
       cacheSet("global-dance-pop-v179",d);
