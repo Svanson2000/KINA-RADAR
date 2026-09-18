@@ -376,7 +376,7 @@ h1{
 
       <div>
         <h1>KINA RADAR</h1>
-        <div class="version">VERSION 17.1</div>
+        <div class="version">VERSION 17.2</div>
       </div>
     </div>
 
@@ -461,10 +461,6 @@ h1{
       💿 COMMERCIAL DANCE
     </button>
 
-    <button class="filter" data-country="ULTRA3">
-      🇧🇪 ULTRATOP TOP 3 • 2000→NU
-    </button>
-
   </div>
 
   <div class="sectionTitle">
@@ -500,8 +496,6 @@ let streamingTracks=[];
 let edmTracks=[];
 let afroTracks=[];
 let commercialDanceTracks=[];
-let ultratopHistoryTracks=[];
-let ultratopYear=new Date().getFullYear();
 const previewCache=new Map();
 let playingCard=null;
 let playlistCards=[];
@@ -636,10 +630,7 @@ function render(){
   } else if(activeCountry==="AFRO"){
     tracks=afroTracks;
   } else if(activeCountry==="COMDANCE"){
-    tracks=commercialDanceTracks;
-  } else if(activeCountry==="ULTRA3"){
-    tracks=ultratopHistoryTracks;
-  } else if(activeCountry!=="ALL"){
+    tracks=commercialDanceTracks;} else if(activeCountry!=="ALL"){
     tracks=tracks.filter(track=>
       (track.countries||[]).includes(activeCountry)
     );
@@ -663,8 +654,6 @@ function render(){
               ? "🌍 AFRO / FRANCOPHONE TOP 10"
               : activeCountry==="COMDANCE"
                 ? "💿 COMMERCIAL DANCE TOP 40 • TOP-5 ONLY"
-                : activeCountry==="ULTRA3"
-                  ? "🇧🇪 ALLE ULTRATOP TOP 3 • 2020 → NU"
                   : `📡 ${activeCountry} RADAR`;
 
   if(!tracks.length){
@@ -813,7 +802,6 @@ document.querySelectorAll(".filter").forEach(button=>{
 
     activeCountry=button.dataset.country;
     activeStatView=null;
-    if(activeCountry==="ULTRA3" && !ultratopHistoryTracks.length) loadUltratopHistory();
     
     document.querySelectorAll(".statFilter").forEach(s=>s.classList.remove("active"));
 
@@ -849,14 +837,6 @@ function miniList(id,items){
   }).join("");
 }
 async function loadStreamingNow(){try{const r=await fetch("/.netlify/functions/streaming-now",{cache:"default"});const d=await r.json();streamingTracks=(d.tracks||[]).map(x=>({...x,score:0,category:"STREAMING",countries:["GLOBAL"]}));if(activeCountry==="STREAM")render();}catch(e){streamingTracks=[];if(activeCountry==="STREAM")render();}}
-async function loadUltratopHistory(){
-  try{
-    const r=await fetch("/.netlify/functions/ultratop-history",{cache:"force-cache"});
-    const d=await r.json();
-    ultratopHistoryTracks=(d.tracks||[]).map((x,i)=>({...x,score:x.peak||0,category:"ULTRATOP TOP 3",countries:["BE"],releaseDate:(x.years||[x.year]).join(", ")}));
-  }catch{ultratopHistoryTracks=[];}
-  if(activeCountry==="ULTRA3")render();
-}
 async function loadCommercialDance(){
   try{
     const r=await fetch("/.netlify/functions/commercial-dance",{cache:"default"});
