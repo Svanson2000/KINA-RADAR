@@ -1,15 +1,5 @@
-function clean(s=""){return String(s).replace(/<[^>]*>/g," ").replace(/&nbsp;/gi," ").replace(/&amp;/gi,"&").replace(/&#39;|&#x27;/gi,"'").replace(/&quot;/gi,'"').replace(/\s+/g," ").trim();}
+function fix(s=""){s=String(s);if(/[ÃÂ]/.test(s)){try{return decodeURIComponent(Array.from(s).map(c=>"%"+c.charCodeAt(0).toString(16).padStart(2,"0")).join(""))}catch{}}return s;}
+function clean(s=""){return fix(String(s).replace(/<[^>]*>/g," ").replace(/&nbsp;/gi," ").replace(/&amp;/gi,"&").replace(/&#39;|&#x27;/gi,"'").replace(/&quot;/gi,'"').replace(/\s+/g," ").trim());}
 function move(p,lw){if(!lw)return{change:null,direction:"NEW",movement:"NEW"};const c=lw-p;return{change:c,direction:c>0?"UP":c<0?"DOWN":"SAME",movement:c>0?`+${c}`:String(c)};}
-function parse(html){
- const a=html.indexOf('id="singletop100"'),b=html.indexOf('id="albumtop100"'),part=html.slice(a>=0?a:0,b>a?b:html.length),tracks=[];
- const rows=part.match(/<tr\b[^>]*>[\s\S]*?<\/tr>/gi)||[];
- for(const row of rows){
-  const cells=row.match(/<td\b[^>]*>[\s\S]*?<\/td>/gi)||[];if(cells.length<5)continue;
-  const ranks=[...cells[0].matchAll(/<div class='nr[^']*'>(\d+)<\/div>/g)].map(x=>Number(x[1]));if(!ranks[0])continue;
-  const titleCell=cells[2].replace(/<div class="showonmobile">[\s\S]*$/i,"");
-  const title=clean(titleCell),artist=clean(cells[3]),label=clean(cells[4]);if(!title||!artist)continue;
-  const p=ranks[0],lw=ranks[1]||null,img=(cells[1].match(/<img[^>]+src=['"]([^'"]+)/i)||[])[1]||null;
-  tracks.push({position:p,title,artist,label,lastWeek:lw,image:img,...move(p,lw)});if(tracks.length>=100)break;
- }return tracks;
-}
-export default async()=>{try{const r=await fetch("https://www.nvpi.nl/muziek/charts",{headers:{"User-Agent":"Mozilla/5.0 (compatible; KINARadar/11.0)",Accept:"text/html"}}),html=await r.text();if(!r.ok)throw new Error(`NVPI antwoordde met ${r.status}`);const tracks=parse(html);return Response.json({version:"11.0",country:"NL",source:"NVPI Single Top 100",success:tracks.length>0,count:tracks.length,tracks},{headers:{"cache-control":"public, max-age=300, s-maxage=21600"}});}catch(e){return Response.json({version:"11.0",country:"NL",success:false,error:e.message,count:0,tracks:[]},{status:500});}};
+function parse(html){const a=html.indexOf('id="singletop100"'),b=html.indexOf('id="albumtop100"'),part=html.slice(a>=0?a:0,b>a?b:html.length),tracks=[];for(const row of part.match(/<tr\b[^>]*>[\s\S]*?<\/tr>/gi)||[]){const cells=row.match(/<td\b[^>]*>[\s\S]*?<\/td>/gi)||[];if(cells.length<5)continue;const ranks=[...cells[0].matchAll(/<div class='nr[^']*'>(\d+)<\/div>/g)].map(x=>Number(x[1]));if(!ranks[0])continue;const title=clean(cells[2].replace(/<div class="showonmobile">[\s\S]*$/i,"")),artist=clean(cells[3]),label=clean(cells[4]);if(!title||!artist)continue;const p=ranks[0],lw=ranks[1]||null,img=(cells[1].match(/<img[^>]+src=['"]([^'"]+)/i)||[])[1]||null;tracks.push({position:p,title,artist,label,lastWeek:lw,image:img,...move(p,lw)});if(tracks.length>=100)break;}return tracks;}
+export default async()=>{try{const r=await fetch("https://www.nvpi.nl/muziek/charts",{headers:{"User-Agent":"Mozilla/5.0 (compatible; KINARadar/11.2)",Accept:"text/html"}}),html=await r.text();if(!r.ok)throw new Error(`NVPI antwoordde met ${r.status}`);const tracks=parse(html);return Response.json({version:"11.2",country:"NL",source:"NVPI Single Top 100",success:tracks.length>0,count:tracks.length,tracks},{headers:{"cache-control":"public, max-age=300, s-maxage=21600"}});}catch(e){return Response.json({version:"11.2",country:"NL",success:false,error:e.message,count:0,tracks:[]},{status:500});}};
