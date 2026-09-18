@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#07080b">
 
-<title>KINA RADAR v9.0</title>
+<title>KINA RADAR v10.0</title>
 
 <style>
 *{box-sizing:border-box}
@@ -358,7 +358,7 @@ h1{
 
       <div>
         <h1>KINA RADAR</h1>
-        <div class="version">VERSION 9.0</div>
+        <div class="version">VERSION 10.0</div>
       </div>
     </div>
 
@@ -552,7 +552,7 @@ async function loadRadar(){
 
   const status=document.getElementById("status");
 
-  status.textContent="Spotify radar wordt gescand...";
+  status.textContent="BE • NL • FR charts worden gescand...";
 
   try{
 
@@ -592,7 +592,7 @@ async function loadRadar(){
       : "";
 
     status.textContent=
-      `✓ LIVE • Spotify • ${radarTracks.length} tracks`+
+      `✓ LIVE • BE + NL + FR • ${radarTracks.length} tracks`+
       (updated ? ` • ${updated}` : "");
 
     render();
