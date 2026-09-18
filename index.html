@@ -358,7 +358,7 @@ h1{
 
       <div>
         <h1>KINA RADAR</h1>
-        <div class="version">VERSION 14.3</div>
+        <div class="version">VERSION 14.4</div>
       </div>
     </div>
 
@@ -474,7 +474,7 @@ function render(){
     const picked=new Map();
     TOP3_COUNTRIES.forEach(country=>{
       radarTracks.filter(track=>(track.countries||[]).includes(country)).sort((a,b)=>(a.positions?.[country]??999)-(b.positions?.[country]??999)).slice(0,3).forEach(track=>{
-        const k=track.id||`${track.title}|${track.artist}`;
+        const k=track.id || (String(track.title||"")+"|"+String(track.artist||""));
         if(!picked.has(k))picked.set(k,{...track,top3Countries:[]});
         picked.get(k).top3Countries.push(country);
       });
