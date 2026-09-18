@@ -307,6 +307,9 @@ h1{
   border-radius:15px;
 }
 
+.playerBar{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);width:min(680px,calc(100% - 24px));z-index:50;display:none;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px 10px 15px;background:rgba(20,22,27,.94);backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px);border:1px solid #30343c;border-radius:18px;box-shadow:0 12px 40px rgba(0,0,0,.35)}
+.playerBar.visible{display:flex}.playerNow{display:flex;align-items:center;gap:10px;min-width:0}.playerNow div{min-width:0}.playerNow strong,.playerNow span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.playerNow strong{font-size:13px}.playerNow span{font-size:11px;color:var(--muted);margin-top:2px}.playerDot{color:var(--green)!important;font-size:10px!important;margin:0!important}.playerControls{display:flex;gap:7px}.playerControls button{width:40px;height:40px;border:0;border-radius:50%;background:#fff;color:#08090b;font-size:15px;font-weight:900;cursor:pointer}.playerControls #stopBtn{background:#2a2d34;color:#fff}
+
 /* MOBILE */
 
 @media(max-width:600px){
@@ -364,7 +367,7 @@ h1{
 
       <div>
         <h1>KINA RADAR</h1>
-        <div class="version">VERSION 15.7</div>
+        <div class="version">VERSION 15.8</div>
       </div>
     </div>
 
@@ -455,6 +458,16 @@ h1{
   <div id="tracks"></div><div class="sectionTitle" style="margin-top:38px"><h2>🎵 TIKTOK TRENDING TOP 10</h2><span>NU TRENDING</span></div><div id="tiktok"></div><div class="sectionTitle" style="margin-top:38px"><h2>📻 TOPRADIO BELGIË TOP 20</h2><span>MEEST GESPEELD</span></div><div id="topradio"></div><div class="sectionTitle" style="margin-top:38px"><h2>📻 VERONICA NEDERLAND TOP 20</h2><span>30 DAGEN</span></div><div id="veronica"></div>
 
 </div>
+<div id="playerBar" class="playerBar">
+  <div class="playerNow">
+    <span class="playerDot">●</span>
+    <div><strong id="playerTitle">Geen track</strong><span id="playerArtist">Dubbelklik op een nummer</span></div>
+  </div>
+  <div class="playerControls">
+    <button id="pauseBtn" type="button" aria-label="Pauze of hervatten">⏸</button>
+    <button id="stopBtn" type="button" aria-label="Stop">■</button>
+  </div>
+</div>
 <audio id="kinaPlayer" preload="none"></audio>
 <script>
 
@@ -515,6 +528,10 @@ async function playTrack(card,title,artist){
     if(playingCard&&playingCard!==card)return;
     player.src=url;
     playingCard=card;
+    document.getElementById("playerTitle").textContent=title;
+    document.getElementById("playerArtist").textContent=artist;
+    document.getElementById("playerBar").classList.add("visible");
+    document.getElementById("pauseBtn").textContent="⏸";
     card.classList.add("playing");
     await player.play();
     player.onended=()=>{
@@ -536,6 +553,21 @@ document.addEventListener("dblclick",e=>{
   const artist=card.querySelector(".artist")?.textContent?.trim();
   if(title&&artist)playTrack(card,title,artist);
 });
+document.getElementById("pauseBtn").addEventListener("click",()=>{
+  const player=document.getElementById("kinaPlayer");
+  if(!player.src||!playingCard)return;
+  if(player.paused){player.play();document.getElementById("pauseBtn").textContent="⏸";}
+  else{player.pause();document.getElementById("pauseBtn").textContent="▶";}
+});
+document.getElementById("stopBtn").addEventListener("click",()=>{
+  const player=document.getElementById("kinaPlayer");
+  player.pause();player.currentTime=0;
+  if(playingCard)playingCard.classList.remove("playing");
+  playingCard=null;
+  document.getElementById("playerBar").classList.remove("visible");
+  document.getElementById("pauseBtn").textContent="⏸";
+});
+
 function categoryBadge(category){
 
   if(category==="HOT NOW"){
