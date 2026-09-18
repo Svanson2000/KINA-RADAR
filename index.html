@@ -367,7 +367,7 @@ h1{
 
       <div>
         <h1>KINA RADAR</h1>
-        <div class="version">VERSION 15.9</div>
+        <div class="version">VERSION 16.0</div>
       </div>
     </div>
 
@@ -492,86 +492,51 @@ const escapeHtml=(value="")=>{
     .replaceAll("'","&#039;");
 };
 
-async function playTrack(card,title,artist){
-  const player=document.getElementById("kinaPlayer");
-  const key=(title+"|"+artist).toLowerCase();
-  const sameCard=playingCard===card;
-
-  // Same track while actually playing = stop. A paused/stopped track may start again.
-  if(sameCard && !player.paused){
-    player.pause();
-    player.currentTime=0;
-    card.classList.remove("playing");
-    playingCard=null;
-    document.getElementById("playerBar").classList.remove("visible");
-    return;
-  }
-
-  // Always release the previous audio before switching tracks.
-  if(playingCard) playingCard.classList.remove("playing");
-  player.pause();
-  player.removeAttribute("src");
-  player.load();
+let playToken=0;
+function hardStop(){
+  playToken++;
+  const p=document.getElementById("kinaPlayer");
+  try{p.pause();p.onended=null;p.onerror=null;p.removeAttribute("src");p.load();}catch{}
+  if(playingCard)playingCard.classList.remove("playing");
   playingCard=null;
-
+}
+async function getPreview(title,artist){
+  const key=(title+"|"+artist).toLowerCase();
+  if(previewCache.has(key))return previewCache.get(key);
   try{
-    let url=previewCache.get(key);
-    if(url===undefined){
-      const r=await fetch("https://itunes.apple.com/search?term="+encodeURIComponent(title+" "+artist)+"&entity=song&limit=5");
-      const d=await r.json();
-      const norm=s=>String(s||"").toLowerCase().replace(/[^a-z0-9]+/g," ");
-      const nt=norm(title),na=norm(artist);
-      const hit=(d.results||[]).find(x=>norm(x.trackName).includes(nt)||nt.includes(norm(x.trackName))) ||
-        (d.results||[]).find(x=>norm(x.artistName).split(" ").some(w=>w.length>3&&na.includes(w))) ||
-        d.results?.[0];
-      url=hit?.previewUrl||null;
-      previewCache.set(key,url);
-    }
-    if(!url){card.animate([{opacity:1},{opacity:.45},{opacity:1}],{duration:350});return;}
-
-    player.src=url;
-    playingCard=card;
-    card.classList.add("playing");
-    document.getElementById("playerTitle").textContent=title;
-    document.getElementById("playerArtist").textContent=artist;
-    document.getElementById("playerBar").classList.add("visible");
-    document.getElementById("pauseBtn").textContent="⏸";
-    await player.play();
-    player.onended=()=>{
-      if(playingCard===card){
-        card.classList.remove("playing");
-        playingCard=null;
-        document.getElementById("playerBar").classList.remove("visible");
-      }
-    };
-  }catch(e){
-    card.classList.remove("playing");
-    if(playingCard===card)playingCard=null;
-  }
+    const r=await fetch("https://itunes.apple.com/search?term="+encodeURIComponent(title+" "+artist)+"&entity=song&limit=5");
+    const d=await r.json(), norm=s=>String(s||"").toLowerCase().replace(/[^a-z0-9]+/g," ");
+    const nt=norm(title),na=norm(artist);
+    const hit=(d.results||[]).find(x=>norm(x.trackName).includes(nt)||nt.includes(norm(x.trackName)))||
+      (d.results||[]).find(x=>norm(x.artistName).split(" ").some(w=>w.length>3&&na.includes(w)))||d.results?.[0];
+    const url=hit?.previewUrl||null;previewCache.set(key,url);return url;
+  }catch{return null}
+}
+async function playTrack(card,title,artist){
+  hardStop();
+  const token=++playToken, p=document.getElementById("kinaPlayer");
+  const url=await getPreview(title,artist);
+  if(token!==playToken||!url)return;
+  p.src=url;p.currentTime=0;playingCard=card;card.classList.add("playing");
+  document.getElementById("playerTitle").textContent=title;
+  document.getElementById("playerArtist").textContent=artist;
+  document.getElementById("playerBar").classList.add("visible");
+  document.getElementById("pauseBtn").textContent="⏸";
+  try{await p.play()}catch{}
+  p.onended=()=>{if(token===playToken){card.classList.remove("playing");playingCard=null;document.getElementById("playerBar").classList.remove("visible")}};
 }
 document.addEventListener("dblclick",e=>{
-  const card=e.target.closest(".track");
-  if(!card)return;
-  e.preventDefault();
-  const title=card.querySelector(".title")?.textContent?.trim();
-  const artist=card.querySelector(".artist")?.textContent?.trim();
+  const card=e.target.closest(".track");if(!card)return;e.preventDefault();
+  const title=card.querySelector(".title")?.textContent?.trim(),artist=card.querySelector(".artist")?.textContent?.trim();
   if(title&&artist)playTrack(card,title,artist);
 });
 document.getElementById("pauseBtn").addEventListener("click",()=>{
-  const player=document.getElementById("kinaPlayer");
-  if(!player.src||!playingCard)return;
-  if(player.paused){player.play();document.getElementById("pauseBtn").textContent="⏸";}
-  else{player.pause();document.getElementById("pauseBtn").textContent="▶";}
+  const p=document.getElementById("kinaPlayer");if(!p.src)return;
+  if(p.paused){p.play().catch(()=>{});document.getElementById("pauseBtn").textContent="⏸";}
+  else{p.pause();document.getElementById("pauseBtn").textContent="▶";}
 });
 document.getElementById("stopBtn").addEventListener("click",()=>{
-  const player=document.getElementById("kinaPlayer");
-  player.pause();
-  if(playingCard)playingCard.classList.remove("playing");
-  playingCard=null;
-  player.removeAttribute("src");
-  player.load();
-  document.getElementById("playerBar").classList.remove("visible");
-  document.getElementById("pauseBtn").textContent="⏸";
+  hardStop();document.getElementById("playerBar").classList.remove("visible");document.getElementById("pauseBtn").textContent="⏸";
 });
 
 function categoryBadge(category){
