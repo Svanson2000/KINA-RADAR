@@ -358,7 +358,7 @@ h1{
 
       <div>
         <h1>KINA RADAR</h1>
-        <div class="version">VERSION 13.3</div>
+        <div class="version">VERSION 13.4</div>
       </div>
     </div>
 
@@ -624,7 +624,22 @@ document.querySelectorAll(".filter").forEach(button=>{
   });
 });
 
-function miniList(id,items){const el=document.getElementById(id);if(!items?.length){el.innerHTML=`<div class="empty">Bron tijdelijk niet beschikbaar.</div>`;return;}el.innerHTML=items.map(x=>`<div class="track"><div class="rank">${x.position}</div><div class="info"><div class="title">${escapeHtml(x.title)}</div><div class="artist">${escapeHtml(x.artist)}</div></div><div class="right">${x.plays?`<div class="score"><strong>${x.plays}</strong><span>PLAYS</span></div>`:""}</div></div>`).join("");}
+function miniList(id,items){
+  const el=document.getElementById(id);
+  if(!items?.length){el.innerHTML=`<div class="empty">Bron tijdelijk niet beschikbaar.</div>`;return;}
+  el.innerHTML=items.map(x=>{
+    const cover=x.image ? `<img class="cover" src="${escapeHtml(x.image)}" alt="" loading="lazy">` : `<div class="cover"></div>`;
+    return `<div class="track">
+      <div class="rank">${x.position}</div>
+      ${cover}
+      <div class="info">
+        <div class="title" title="${escapeHtml(x.title)}">${escapeHtml(x.title)}</div>
+        <div class="artist" title="${escapeHtml(x.artist)}">${escapeHtml(x.artist)}</div>
+      </div>
+      <div class="right">${x.plays?`<div class="score"><strong>${x.plays}</strong><span>PLAYS</span></div>`:""}</div>
+    </div>`;
+  }).join("");
+}
 async function loadTrends(){try{const r=await fetch("/.netlify/functions/trends?ts="+Date.now(),{cache:"no-store"});const d=await r.json();miniList("tiktok",d.tiktok);miniList("topradio",d.topradio);miniList("veronica",d.veronica);}catch(e){["tiktok","topradio","veronica"].forEach(id=>miniList(id,[]));}}
 loadRadar();
 loadTrends();
