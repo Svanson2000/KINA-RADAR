@@ -376,7 +376,7 @@ h1{
 
       <div>
         <h1>KINA RADAR</h1>
-        <div class="version">VERSION 16.3</div>
+        <div class="version">VERSION 16.4</div>
       </div>
     </div>
 
@@ -529,18 +529,33 @@ async function playTrack(card,title,artist){
   playlistCards=[...document.querySelectorAll("#tracks .track")];
   playlistIndex=playlistCards.indexOf(card);
   hardStop();
-  const token=++playToken, p=document.getElementById("kinaPlayer");
+  const token=++playToken,p=document.getElementById("kinaPlayer");
   const url=await getPreview(title,artist);
-  if(token!==playToken||!url)return;
+  if(token!==playToken)return;
+  if(!url){setTimeout(()=>{if(token===playToken)playAdjacent(1)},120);return;}
+
   p.src=url;p.currentTime=0;playingCard=card;card.classList.add("playing");
   document.getElementById("playerTitle").textContent=title;
   document.getElementById("playerArtist").textContent=artist;
   document.getElementById("playerBar").classList.add("visible");
   document.getElementById("pauseBtn").textContent="⏸";
-  try{await p.play()}catch{}
-  p.onended=()=>{if(token===playToken){card.classList.remove("playing");playingCard=null;playAdjacent(1)}};
+
+  let settled=false;
+  const skip=()=>{
+    if(settled||token!==playToken)return;
+    settled=true;card.classList.remove("playing");playingCard=null;
+    setTimeout(()=>{if(token===playToken)playAdjacent(1)},100);
+  };
+  const timer=setTimeout(()=>{if(p.paused||p.readyState<2)skip()},4500);
+  p.onerror=()=>{clearTimeout(timer);skip()};
+  p.onstalled=()=>{clearTimeout(timer);skip()};
+  p.onabort=()=>{clearTimeout(timer);skip()};
+  p.onended=()=>{clearTimeout(timer);skip()};
+  try{
+    await p.play();
+    if(token===playToken){clearTimeout(timer);settled=false;}
+  }catch(e){clearTimeout(timer);skip();}
 }
-let lastTap=0,lastTapCard=null;
 document.addEventListener("click",e=>{
   const card=e.target.closest(".track");if(!card)return;
   const now=Date.now();
