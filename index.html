@@ -358,7 +358,7 @@ h1{
 
       <div>
         <h1>KINA RADAR</h1>
-        <div class="version">VERSION 14.6</div>
+        <div class="version">VERSION 15.0</div>
       </div>
     </div>
 
@@ -434,7 +434,7 @@ h1{
     <span>KINA SCORE</span>
   </div>
 
-  <div id="tracks"></div><div class="sectionTitle" style="margin-top:38px"><h2>🎵 TIKTOK TRENDING TOP 10</h2><span>NU TRENDING</span></div><div id="tiktok"></div><div class="sectionTitle" style="margin-top:38px"><h2>📻 TOPRADIO BELGIË TOP 20</h2><span>MEEST GESPEELD</span></div><div id="topradio"></div><div class="sectionTitle" style="margin-top:38px"><h2>📻 VERONICA NEDERLAND TOP 20</h2><span>30 DAGEN</span></div><div id="veronica"></div>
+  <div id="tracks"></div><div class="sectionTitle" style="margin-top:38px"><h2>🌍 STREAMING NOW TOP 20</h2><span>GLOBAL • MULTI-PLATFORM</span></div><div id="streamingNow"></div><div class="sectionTitle" style="margin-top:38px"><h2>🎵 TIKTOK TRENDING TOP 10</h2><span>NU TRENDING</span></div><div id="tiktok"></div><div class="sectionTitle" style="margin-top:38px"><h2>📻 TOPRADIO BELGIË TOP 20</h2><span>MEEST GESPEELD</span></div><div id="topradio"></div><div class="sectionTitle" style="margin-top:38px"><h2>📻 VERONICA NEDERLAND TOP 20</h2><span>30 DAGEN</span></div><div id="veronica"></div>
 
 </div>
 
@@ -658,8 +658,10 @@ function miniList(id,items){
     </div>`;
   }).join("");
 }
+async function loadStreamingNow(){try{const r=await fetch("/.netlify/functions/streaming-now?ts="+Date.now(),{cache:"no-store"});const d=await r.json();miniList("streamingNow",d.tracks);}catch(e){miniList("streamingNow",[]);}}
 async function loadTrends(){try{const r=await fetch("/.netlify/functions/trends?ts="+Date.now(),{cache:"no-store"});const d=await r.json();miniList("tiktok",d.tiktok);miniList("topradio",d.topradio);miniList("veronica",d.veronica);}catch(e){["tiktok","topradio","veronica"].forEach(id=>miniList(id,[]));}}
 loadRadar();
+loadStreamingNow();
 loadTrends();
 
 </script>
