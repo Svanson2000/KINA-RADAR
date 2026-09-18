@@ -376,7 +376,7 @@ h1{
 
       <div>
         <h1>KINA RADAR</h1>
-        <div class="version">VERSION 17.0</div>
+        <div class="version">VERSION 17.1</div>
       </div>
     </div>
 
@@ -638,10 +638,7 @@ function render(){
   } else if(activeCountry==="COMDANCE"){
     tracks=commercialDanceTracks;
   } else if(activeCountry==="ULTRA3"){
-    const c=document.getElementById("tracks");
-    tracks=ultratopHistoryTracks;}
-    c.innerHTML=ultratopMonths.map(m=>'<div class="sectionTitle" style="margin-top:28px"><h2>'+m.name+' '+ultratopYear+'</h2><span>WEEKLIJKSE TOP 3</span></div>'+m.tracks.map((t,i)=>'<div class="track"><div class="rank">'+t.best+'</div><div class="cover" style="display:grid;place-items:center;font-weight:900">#'+t.best+'</div><div class="info"><div class="title">'+escapeHtml(t.title)+'</div><div class="artist">'+escapeHtml(t.artist||"")+'</div><div class="meta"><span class="badge">TOP 3</span><span class="badge">'+t.weeksTop3+'× TOP 3</span></div></div><div class="right"></div></div>').join('')).join('');
-    return;
+    tracks=ultratopHistoryTracks;
   } else if(activeCountry!=="ALL"){
     tracks=tracks.filter(track=>
       (track.countries||[]).includes(activeCountry)
@@ -756,10 +753,7 @@ async function loadRadar(){
 
   try{
 
-    const response=await fetch(
-      "/.netlify/functions/radar?ts="+Date.now(),
-      {cache:"no-store"}
-    );
+    const response=await fetch("/.netlify/functions/radar",{cache:"default"});
 
     const data=await response.json();
 
@@ -854,10 +848,10 @@ function miniList(id,items){
     </div>`;
   }).join("");
 }
-async function loadStreamingNow(){try{const r=await fetch("/.netlify/functions/streaming-now?ts="+Date.now(),{cache:"no-store"});const d=await r.json();streamingTracks=(d.tracks||[]).map(x=>({...x,score:0,category:"STREAMING",countries:["GLOBAL"]}));if(activeCountry==="STREAM")render();}catch(e){streamingTracks=[];if(activeCountry==="STREAM")render();}}
+async function loadStreamingNow(){try{const r=await fetch("/.netlify/functions/streaming-now",{cache:"default"});const d=await r.json();streamingTracks=(d.tracks||[]).map(x=>({...x,score:0,category:"STREAMING",countries:["GLOBAL"]}));if(activeCountry==="STREAM")render();}catch(e){streamingTracks=[];if(activeCountry==="STREAM")render();}}
 async function loadUltratopHistory(){
   try{
-    const r=await fetch("/.netlify/functions/ultratop-history?ts="+Date.now(),{cache:"no-store"});
+    const r=await fetch("/.netlify/functions/ultratop-history",{cache:"force-cache"});
     const d=await r.json();
     ultratopHistoryTracks=(d.tracks||[]).map((x,i)=>({...x,score:x.peak||0,category:"ULTRATOP TOP 3",countries:["BE"],releaseDate:(x.years||[x.year]).join(", ")}));
   }catch{ultratopHistoryTracks=[];}
@@ -865,19 +859,18 @@ async function loadUltratopHistory(){
 }
 async function loadCommercialDance(){
   try{
-    const r=await fetch("/.netlify/functions/commercial-dance?ts="+Date.now(),{cache:"no-store"});
+    const r=await fetch("/.netlify/functions/commercial-dance",{cache:"default"});
     const d=await r.json();
     commercialDanceTracks=(d.tracks||[]).map((x,i)=>({...x,score:Math.max(61,100-i),category:"TOP 5 DANCE",countries:["UK DANCE"]}));
   }catch{commercialDanceTracks=[];}
   if(activeCountry==="COMDANCE")render();
 }
-async function loadGenreLists(){const load=async(path)=>{try{const r=await fetch("/.netlify/functions/"+path+"?ts="+Date.now(),{cache:"no-store"});const d=await r.json();return d.tracks||[]}catch{return[]}};[edmTracks,afroTracks]=await Promise.all([load("edm-now"),load("afro-now")]);if(activeCountry==="EDM"||activeCountry==="AFRO")render();}
-async function loadTrends(){try{const r=await fetch("/.netlify/functions/trends?ts="+Date.now(),{cache:"no-store"});const d=await r.json();miniList("tiktok",d.tiktok);miniList("topradio",d.topradio);miniList("veronica",d.veronica);}catch(e){["tiktok","topradio","veronica"].forEach(id=>miniList(id,[]));}}
+async function loadGenreLists(){const load=async(path)=>{try{const r=await fetch("/.netlify/functions/"+path,{cache:"default"});const d=await r.json();return d.tracks||[]}catch{return[]}};[edmTracks,afroTracks]=await Promise.all([load("edm-now"),load("afro-now")]);if(activeCountry==="EDM"||activeCountry==="AFRO")render();}
+async function loadTrends(){try{const r=await fetch("/.netlify/functions/trends",{cache:"default"});const d=await r.json();miniList("tiktok",d.tiktok);miniList("topradio",d.topradio);miniList("veronica",d.veronica);}catch(e){["tiktok","topradio","veronica"].forEach(id=>miniList(id,[]));}}
 loadRadar();
-loadStreamingNow();
-loadGenreLists();
-loadCommercialDance();
-loadTrends();
+const loadExtras=()=>Promise.allSettled([loadStreamingNow(),loadGenreLists(),loadCommercialDance(),loadTrends()]);
+if("requestIdleCallback" in window) requestIdleCallback(loadExtras,{timeout:1800});
+else setTimeout(loadExtras,700);
 
 </script>
 
