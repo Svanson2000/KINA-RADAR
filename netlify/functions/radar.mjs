@@ -1,98 +1,10 @@
-const SOURCES = [
-  { country: "BE", path: "belgium-chart", name: "Ultratop Vlaanderen" },
-  { country: "NL", path: "netherlands-chart", name: "NVPI Single Top 100" },
-  { country: "FR", path: "france-chart", name: "French Singles" }
-];
-
-function key(t) {
-  return (t.title + "|" + t.artist).toLowerCase().normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9|]/g, "");
-}
-function score(e) {
-  let s = 92 - Math.min(72, (e.bestPosition - 1) * 2);
-  s += Math.min(12, (e.countries.length - 1) * 6);
-  if (e.change >= 10) s += 10;
-  else if (e.change >= 5) s += 7;
-  else if (e.change >= 2) s += 4;
-  else if (e.change > 0) s += 2;
-  if (e.direction === "NEW") s += 8;
-  return Math.max(20, Math.min(100, Math.round(s)));
-}
-function classify(t) {
-  if (t.direction === "NEW" || t.change >= 5) return "BREAKOUT";
-  if (t.score >= 82) return "HOT NOW";
-  if (t.score >= 68) return "BREAKOUT";
-  return "RADAR";
-}
-async function source(origin, s) {
-  try {
-    const r = await fetch(`${origin}/.netlify/functions/${s.path}?v=113`, { cache: "no-store" });
-    const d = await r.json();
-    return {
-      ...s,
-      active: r.ok && d.success && Array.isArray(d.tracks) && d.tracks.length > 0,
-      tracks: Array.isArray(d.tracks) ? d.tracks : [],
-      error: d.error || null
-    };
-  } catch (e) {
-    return { ...s, active: false, tracks: [], error: e.message };
-  }
-}
-export default async (request) => {
-  const origin = new URL(request.url).origin;
-  const results = await Promise.all(SOURCES.map((s) => source(origin, s)));
-  const map = new Map();
-
-  for (const src of results) {
-    for (const t of src.tracks.slice(0, 100)) {
-      const k = key(t);
-      if (!k) continue;
-      const existing = map.get(k);
-      if (!existing) {
-        map.set(k, {
-          id: k, title: t.title, artist: t.artist,
-          countries: [src.country], positions: { [src.country]: t.position },
-          bestPosition: t.position || 99, lastWeek: t.lastWeek ?? null,
-          change: t.change ?? 0, direction: t.direction || null,
-          movement: t.movement || null, image: t.image || null,
-          spotifyUrl: null, releaseDate: null
-        });
-      } else {
-        if (!existing.countries.includes(src.country)) existing.countries.push(src.country);
-        existing.positions[src.country] = t.position;
-        existing.bestPosition = Math.min(existing.bestPosition, t.position || 99);
-        if (!existing.image && t.image) existing.image = t.image;
-        if ((t.change ?? 0) > existing.change) {
-          existing.change = t.change;
-          existing.direction = t.direction;
-          existing.movement = t.movement;
-        }
-      }
-    }
-  }
-
-  let tracks = [...map.values()].map((t) => {
-    const s = score(t);
-    return { ...t, score: s, category: classify({ ...t, score: s }) };
-  });
-  tracks.sort((a, b) => b.score - a.score || a.bestPosition - b.bestPosition);
-  tracks = tracks.slice(0, 100);
-
-  const hotNow = tracks.filter((t) => t.category === "HOT NOW");
-  const breakout = tracks.filter((t) => t.category === "BREAKOUT");
-  const chartSources = {};
-  for (const r of results) {
-    chartSources[r.country.toLowerCase()] = {
-      active: r.active, tracksLoaded: r.tracks.length, error: r.error
-    };
-  }
-
-  return Response.json({
-    version: "11.3", updated: new Date().toISOString(),
-    source: "NL + FR live chart feeds; BE awaiting compliant source",
-    spotify: { active: false, reason: "Paused after Spotify API QUOTA_EXCEEDED" },
-    chartSources,
-    stats: { candidates: map.size, tracks: tracks.length, hotNow: hotNow.length, breakout: breakout.length },
-    tracks, hotNow, breakout
-  }, { headers: { "cache-control": "public, max-age=60, s-maxage=1800, stale-while-revalidate=3600" } });
-};
+const SOURCES=[{country:"BE",path:"belgium-chart",name:"Apple Music Belgium"},{country:"NL",path:"netherlands-chart",name:"NVPI Single Top 100"},{country:"FR",path:"france-chart",name:"French Singles"}];
+function key(t){return(t.title+"|"+t.artist).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9|]/g,"");}
+function calc(e){const pos=Math.max(1,e.bestPosition||100);let s=100-Math.min(70,(pos-1)*1.55);const multi=(e.countries.length-1)*9;let momentum=0;if(e.change>=20)momentum=18;else if(e.change>=10)momentum=14;else if(e.change>=5)momentum=10;else if(e.change>=2)momentum=6;else if(e.change>0)momentum=3;else if(e.change<0)momentum=Math.max(-10,e.change*.7);if(e.direction==="NEW")momentum=12;return Math.max(15,Math.min(100,Math.round(s+multi+momentum)));}
+function category(t){if(t.direction==="NEW"||t.change>=5)return"BREAKOUT";if(t.score>=85||t.countries.length>=2&&t.score>=78)return"HOT NOW";if(t.score>=68||t.change>=2)return"BREAKOUT";return"RADAR";}
+async function load(origin,s){try{const r=await fetch(`${origin}/.netlify/functions/${s.path}?v=120`,{cache:"no-store"}),d=await r.json();return{...s,active:r.ok&&d.success&&Array.isArray(d.tracks)&&d.tracks.length>0,tracks:Array.isArray(d.tracks)?d.tracks:[],error:d.error||null};}catch(e){return{...s,active:false,tracks:[],error:e.message};}}
+export default async request=>{const origin=new URL(request.url).origin,results=await Promise.all(SOURCES.map(s=>load(origin,s))),map=new Map();
+for(const src of results)for(const t of src.tracks.slice(0,100)){const k=key(t);if(!k)continue;let e=map.get(k);if(!e){e={id:k,title:t.title,artist:t.artist,countries:[],positions:{},movements:{},bestPosition:999,lastWeek:null,change:0,direction:null,movement:null,image:t.image||null,url:t.url||null,releaseDate:null};map.set(k,e);}if(!e.countries.includes(src.country))e.countries.push(src.country);e.positions[src.country]=t.position;e.movements[src.country]=t.movement||null;e.bestPosition=Math.min(e.bestPosition,t.position||999);if(!e.image&&t.image)e.image=t.image;if(!e.url&&t.url)e.url=t.url;if(t.lastWeek!=null&&(e.lastWeek==null||(t.change??0)>e.change)){e.lastWeek=t.lastWeek;e.change=t.change??0;e.direction=t.direction;e.movement=t.movement;}}
+let tracks=[...map.values()].map(t=>{const score=calc(t);return{...t,score,category:category({...t,score}),crossCountry:t.countries.length>=2}}).sort((a,b)=>b.score-a.score||b.countries.length-a.countries.length||a.bestPosition-b.bestPosition).slice(0,100);
+const hotNow=tracks.filter(t=>t.category==="HOT NOW"),breakout=tracks.filter(t=>t.category==="BREAKOUT"),chartSources={};for(const r of results)chartSources[r.country.toLowerCase()]={active:r.active,tracksLoaded:r.tracks.length,error:r.error,source:r.name};
+return Response.json({version:"12.0",updated:new Date().toISOString(),source:"BE + NL + FR live chart radar",chartSources,stats:{candidates:map.size,tracks:tracks.length,hotNow:hotNow.length,breakout:breakout.length,crossCountry:tracks.filter(t=>t.crossCountry).length},tracks,hotNow,breakout},{headers:{"cache-control":"public, max-age=60, s-maxage=1800, stale-while-revalidate=3600"}});};
