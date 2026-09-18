@@ -364,7 +364,7 @@ h1{
 
       <div>
         <h1>KINA RADAR</h1>
-        <div class="version">VERSION 15.6</div>
+        <div class="version">VERSION 15.7</div>
       </div>
     </div>
 
@@ -480,27 +480,60 @@ const escapeHtml=(value="")=>{
 };
 
 async function playTrack(card,title,artist){
-  const player=document.getElementById("kinaPlayer"), key=(title+"|"+artist).toLowerCase();
+  const player=document.getElementById("kinaPlayer");
+  const key=(title+"|"+artist).toLowerCase();
+  const oldCard=playingCard;
+
+  // Stop the current preview immediately so switching feels instant.
+  if(oldCard){
+    oldCard.classList.remove("playing");
+    player.pause();
+    player.removeAttribute("src");
+    player.load();
+    playingCard=null;
+  }
+
+  // Double-clicking the same playing track acts as stop.
+  if(oldCard===card)return;
+
   try{
-    if(playingCard===card&&!player.paused){player.pause();card.classList.remove("playing");playingCard=null;return;}
     let url=previewCache.get(key);
     if(url===undefined){
       const r=await fetch("https://itunes.apple.com/search?term="+encodeURIComponent(title+" "+artist)+"&entity=song&limit=5");
       const d=await r.json();
       const norm=s=>String(s||"").toLowerCase().replace(/[^a-z0-9]+/g," ");
       const nt=norm(title),na=norm(artist);
-      const hit=(d.results||[]).find(x=>norm(x.trackName).includes(nt)||nt.includes(norm(x.trackName))) || (d.results||[]).find(x=>norm(x.artistName).split(" ").some(w=>w.length>3&&na.includes(w))) || d.results?.[0];
-      url=hit?.previewUrl||null; previewCache.set(key,url);
+      const hit=(d.results||[]).find(x=>norm(x.trackName).includes(nt)||nt.includes(norm(x.trackName))) ||
+        (d.results||[]).find(x=>norm(x.artistName).split(" ").some(w=>w.length>3&&na.includes(w))) ||
+        d.results?.[0];
+      url=hit?.previewUrl||null;
+      previewCache.set(key,url);
     }
     if(!url){card.animate([{opacity:1},{opacity:.45},{opacity:1}],{duration:350});return;}
-    if(playingCard)playingCard.classList.remove("playing");
-    player.src=url; await player.play(); playingCard=card; card.classList.add("playing");
-    player.onended=()=>{card.classList.remove("playing");playingCard=null;};
-  }catch(e){}
+
+    // A newer double-click may have started while this lookup was loading.
+    if(playingCard&&playingCard!==card)return;
+    player.src=url;
+    playingCard=card;
+    card.classList.add("playing");
+    await player.play();
+    player.onended=()=>{
+      if(playingCard===card){
+        card.classList.remove("playing");
+        playingCard=null;
+      }
+    };
+  }catch(e){
+    card.classList.remove("playing");
+    if(playingCard===card)playingCard=null;
+  }
 }
 document.addEventListener("dblclick",e=>{
-  const card=e.target.closest(".track"); if(!card)return;
-  const title=card.querySelector(".title")?.textContent?.trim(),artist=card.querySelector(".artist")?.textContent?.trim();
+  const card=e.target.closest(".track");
+  if(!card)return;
+  e.preventDefault();
+  const title=card.querySelector(".title")?.textContent?.trim();
+  const artist=card.querySelector(".artist")?.textContent?.trim();
   if(title&&artist)playTrack(card,title,artist);
 });
 function categoryBadge(category){
