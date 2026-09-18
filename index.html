@@ -376,7 +376,7 @@ h1{
 
       <div>
         <h1>KINA RADAR</h1>
-        <div class="version">VERSION 17.7</div>
+        <div class="version">VERSION 17.8</div>
       </div>
     </div>
 
@@ -851,7 +851,7 @@ function miniList(id,items){
   }).join("");
 }
 async function loadStreamingNow(){try{const d=await cachedJSON("stream","/.netlify/functions/streaming-now");streamingTracks=(d.tracks||[]).map(x=>({...x,score:0,category:"STREAMING",countries:["GLOBAL"]}));if(activeCountry==="STREAM")render();}catch{streamingTracks=[];}}
-async function loadBillboardDancePop(){try{const d=await cachedJSON("global-dance-pop-v177","/.netlify/functions/billboard-dance-pop");billboardDancePopTracks=(d.tracks||[]).map(x=>({...x,score:x.position||0,category:"GLOBAL DANCE",countries:["US"]}));if(activeCountry==="BBDANCE")render();}catch{billboardDancePopTracks=[];}}
+async function loadBillboardDancePop(){try{const d=await cachedJSON("global-dance-pop-v178","/.netlify/functions/billboard-dance-pop");billboardDancePopTracks=(d.tracks||[]).map(x=>({...x,score:x.position||0,category:"GLOBAL DANCE",countries:["US"]}));if(activeCountry==="BBDANCE")render();}catch{billboardDancePopTracks=[];}}
 async function loadCommercialDance(){try{const d=await cachedJSON("dance","/.netlify/functions/commercial-dance");commercialDanceTracks=(d.tracks||[]).map((x,i)=>({...x,score:Math.max(61,100-i),category:"TOP 5 DANCE",countries:["UK DANCE"]}));if(activeCountry==="COMDANCE")render();}catch{commercialDanceTracks=[];}}
 async function loadGenreLists(){const load=async(path)=>{try{return (await cachedJSON(path,"/.netlify/functions/"+path)).tracks||[]}catch{return[]}};[edmTracks,afroTracks]=await Promise.all([load("edm-now"),load("afro-now")]);if(activeCountry==="EDM"||activeCountry==="AFRO")render();}
 async function loadTrends(){try{const d=await cachedJSON("trends","/.netlify/functions/trends");miniList("tiktok",d.tiktok);miniList("topradio",d.topradio);miniList("veronica",d.veronica);}catch{["tiktok","topradio","veronica"].forEach(id=>miniList(id,[]));}}
