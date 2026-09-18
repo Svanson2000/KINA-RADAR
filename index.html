@@ -364,7 +364,7 @@ h1{
 
       <div>
         <h1>KINA RADAR</h1>
-        <div class="version">VERSION 15.5</div>
+        <div class="version">VERSION 15.6</div>
       </div>
     </div>
 
@@ -461,6 +461,8 @@ h1{
 let radarTracks=[];
 let activeCountry="ALL";
 let activeStatView=null;
+let hotNowTracks=[];
+let breakoutTracks=[];
 let top3Mix=[];
 let streamingTracks=[];
 let edmTracks=[];
@@ -519,9 +521,9 @@ function render(){
   let tracks=radarTracks;
 
   if(activeStatView==="HOT"){
-    tracks=radarTracks.filter(track=>track.category==="HOT NOW");
+    tracks=hotNowTracks.length ? hotNowTracks : radarTracks.filter(track=>track.category==="HOT NOW");
   } else if(activeStatView==="BREAKOUT"){
-    tracks=radarTracks.filter(track=>track.category==="BREAKOUT");
+    tracks=breakoutTracks.length ? breakoutTracks : radarTracks.filter(track=>track.category==="BREAKOUT");
   } else if(activeStatView==="TOP100"){
     tracks=radarTracks.slice(0,100);
   } else
@@ -659,19 +661,17 @@ async function loadRadar(){
 
     radarTracks=data.tracks||[];
     top3Mix=data.top3Mix||[];
+    hotNowTracks=data.hotNow||[];
+    breakoutTracks=data.breakout||[];
 
     document.getElementById("total").textContent=
       radarTracks.length;
 
     document.getElementById("hotCount").textContent=
-      radarTracks.filter(
-        track=>track.category==="HOT NOW"
-      ).length;
+      hotNowTracks.length;
 
     document.getElementById("breakCount").textContent=
-      radarTracks.filter(
-        track=>track.category==="BREAKOUT"
-      ).length;
+      breakoutTracks.length;
 
     const updated=data.updated
       ? new Date(data.updated).toLocaleTimeString(
@@ -716,7 +716,7 @@ document.querySelectorAll(".filter").forEach(button=>{
 });
 
 document.querySelectorAll(".statFilter").forEach(stat=>{
-  stat.addEventListener("dblclick",()=>{
+  stat.addEventListener("click",()=>{
     activeStatView=stat.dataset.view;
     document.querySelectorAll(".statFilter").forEach(s=>s.classList.remove("active"));
     stat.classList.add("active");
