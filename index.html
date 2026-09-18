@@ -376,7 +376,7 @@ h1{
 
       <div>
         <h1>KINA RADAR</h1>
-        <div class="version">VERSION 17.2</div>
+        <div class="version">VERSION 17.3</div>
       </div>
     </div>
 
@@ -734,6 +734,13 @@ function render(){
   }).join("");
 }
 
+const CACHE_TTL=15*60*1000;
+function cacheGet(k){try{const x=JSON.parse(localStorage.getItem("kina:"+k)||"null");return x&&Date.now()-x.t<CACHE_TTL?x.v:null}catch{return null}}
+function cacheSet(k,v){try{localStorage.setItem("kina:"+k,JSON.stringify({t:Date.now(),v}))}catch{}}
+async function cachedJSON(k,url){
+  const hit=cacheGet(k); if(hit) return hit;
+  const r=await fetch(url,{cache:"default"}); const d=await r.json(); if(r.ok)cacheSet(k,d); return d;
+}
 async function loadRadar(){
 
   const status=document.getElementById("status");
@@ -742,16 +749,14 @@ async function loadRadar(){
 
   try{
 
-    const response=await fetch("/.netlify/functions/radar",{cache:"default"});
-
-    const data=await response.json();
-
-    if(!response.ok){
-      throw new Error(
-        data.error || "Radar kon niet geladen worden"
-      );
+    const cached=cacheGet("radar");
+    let data=cached;
+    if(!data){
+      const response=await fetch("/.netlify/functions/radar",{cache:"default"});
+      data=await response.json();
+      if(!response.ok) throw new Error(data.error||"Radar kon niet geladen worden");
+      cacheSet("radar",data);
     }
-
     radarTracks=data.tracks||[];
     top3Mix=data.top3Mix||[];
     hotNowTracks=data.hotNow||[];
@@ -836,17 +841,10 @@ function miniList(id,items){
     </div>`;
   }).join("");
 }
-async function loadStreamingNow(){try{const r=await fetch("/.netlify/functions/streaming-now",{cache:"default"});const d=await r.json();streamingTracks=(d.tracks||[]).map(x=>({...x,score:0,category:"STREAMING",countries:["GLOBAL"]}));if(activeCountry==="STREAM")render();}catch(e){streamingTracks=[];if(activeCountry==="STREAM")render();}}
-async function loadCommercialDance(){
-  try{
-    const r=await fetch("/.netlify/functions/commercial-dance",{cache:"default"});
-    const d=await r.json();
-    commercialDanceTracks=(d.tracks||[]).map((x,i)=>({...x,score:Math.max(61,100-i),category:"TOP 5 DANCE",countries:["UK DANCE"]}));
-  }catch{commercialDanceTracks=[];}
-  if(activeCountry==="COMDANCE")render();
-}
-async function loadGenreLists(){const load=async(path)=>{try{const r=await fetch("/.netlify/functions/"+path,{cache:"default"});const d=await r.json();return d.tracks||[]}catch{return[]}};[edmTracks,afroTracks]=await Promise.all([load("edm-now"),load("afro-now")]);if(activeCountry==="EDM"||activeCountry==="AFRO")render();}
-async function loadTrends(){try{const r=await fetch("/.netlify/functions/trends",{cache:"default"});const d=await r.json();miniList("tiktok",d.tiktok);miniList("topradio",d.topradio);miniList("veronica",d.veronica);}catch(e){["tiktok","topradio","veronica"].forEach(id=>miniList(id,[]));}}
+async function loadStreamingNow(){try{const d=await cachedJSON("stream","/.netlify/functions/streaming-now");streamingTracks=(d.tracks||[]).map(x=>({...x,score:0,category:"STREAMING",countries:["GLOBAL"]}));if(activeCountry==="STREAM")render();}catch{streamingTracks=[];}}
+async function loadCommercialDance(){try{const d=await cachedJSON("dance","/.netlify/functions/commercial-dance");commercialDanceTracks=(d.tracks||[]).map((x,i)=>({...x,score:Math.max(61,100-i),category:"TOP 5 DANCE",countries:["UK DANCE"]}));if(activeCountry==="COMDANCE")render();}catch{commercialDanceTracks=[];}}
+async function loadGenreLists(){const load=async(path)=>{try{return (await cachedJSON(path,"/.netlify/functions/"+path)).tracks||[]}catch{return[]}};[edmTracks,afroTracks]=await Promise.all([load("edm-now"),load("afro-now")]);if(activeCountry==="EDM"||activeCountry==="AFRO")render();}
+async function loadTrends(){try{const d=await cachedJSON("trends","/.netlify/functions/trends");miniList("tiktok",d.tiktok);miniList("topradio",d.topradio);miniList("veronica",d.veronica);}catch{["tiktok","topradio","veronica"].forEach(id=>miniList(id,[]));}}
 loadRadar();
 const loadExtras=()=>Promise.allSettled([loadStreamingNow(),loadGenreLists(),loadCommercialDance(),loadTrends()]);
 if("requestIdleCallback" in window) requestIdleCallback(loadExtras,{timeout:1800});
