@@ -358,7 +358,7 @@ h1{
 
       <div>
         <h1>KINA RADAR</h1>
-        <div class="version">VERSION 14.0</div>
+        <div class="version">VERSION 14.3</div>
       </div>
     </div>
 
@@ -423,6 +423,10 @@ h1{
       🇮🇹 ITALIË
     </button>
 
+    <button class="filter" data-country="TOP3">
+      🏆 TOP 3 MIX
+    </button>
+
   </div>
 
   <div class="sectionTitle">
@@ -438,6 +442,7 @@ h1{
 
 let radarTracks=[];
 let activeCountry="ALL";
+const TOP3_COUNTRIES=["BE","NL","FR","ES","IT"];
 
 const escapeHtml=(value="")=>{
   return String(value)
@@ -465,10 +470,18 @@ function render(){
 
   let tracks=radarTracks;
 
-  if(activeCountry!=="ALL"){
-    tracks=tracks.filter(track=>
-      (track.countries||[]).includes(activeCountry)
-    );
+  if(activeCountry==="TOP3"){
+    const picked=new Map();
+    TOP3_COUNTRIES.forEach(country=>{
+      radarTracks.filter(track=>(track.countries||[]).includes(country)).sort((a,b)=>(a.positions?.[country]??999)-(b.positions?.[country]??999)).slice(0,3).forEach(track=>{
+        const k=track.id||`${track.title}|${track.artist}`;
+        if(!picked.has(k))picked.set(k,{...track,top3Countries:[]});
+        picked.get(k).top3Countries.push(country);
+      });
+    });
+    tracks=[...picked.values()].sort((a,b)=>b.top3Countries.length-a.top3Countries.length||b.score-a.score);
+  } else if(activeCountry!=="ALL"){
+    tracks=tracks.filter(track=>(track.countries||[]).includes(activeCountry));
   }
 
   const container=document.getElementById("tracks");
@@ -476,7 +489,7 @@ function render(){
   document.getElementById("listTitle").textContent=
     activeCountry==="ALL"
       ? "📡 TOP 50"
-      : `📡 ${activeCountry} RADAR`;
+      : activeCountry==="TOP3" ? "🏆 TOP 3 × 5 LANDEN" : `📡 ${activeCountry} RADAR`;
 
   if(!tracks.length){
     container.innerHTML=
