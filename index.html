@@ -129,6 +129,10 @@ h1{
   font-size:12px;
 }
 
+.statFilter{cursor:pointer;transition:.15s}
+.statFilter:hover{background:#171a20;transform:translateY(-1px)}
+.statFilter.active{outline:2px solid var(--green);background:#142019}
+
 /* FILTERS */
 
 .filters{
@@ -360,7 +364,7 @@ h1{
 
       <div>
         <h1>KINA RADAR</h1>
-        <div class="version">VERSION 15.4</div>
+        <div class="version">VERSION 15.5</div>
       </div>
     </div>
 
@@ -382,17 +386,17 @@ h1{
 
   <div class="stats">
 
-    <div class="stat">
+    <div class="stat statFilter" data-view="TOP100">
       <strong id="total">0</strong>
       <span>TOP RADAR</span>
     </div>
 
-    <div class="stat">
+    <div class="stat statFilter" data-view="HOT">
       <strong id="hotCount">0</strong>
       <span>🔥 HOT NOW</span>
     </div>
 
-    <div class="stat">
+    <div class="stat statFilter" data-view="BREAKOUT">
       <strong id="breakCount">0</strong>
       <span>🚀 BREAKOUT</span>
     </div>
@@ -456,6 +460,7 @@ h1{
 
 let radarTracks=[];
 let activeCountry="ALL";
+let activeStatView=null;
 let top3Mix=[];
 let streamingTracks=[];
 let edmTracks=[];
@@ -513,6 +518,14 @@ function render(){
 
   let tracks=radarTracks;
 
+  if(activeStatView==="HOT"){
+    tracks=radarTracks.filter(track=>track.category==="HOT NOW");
+  } else if(activeStatView==="BREAKOUT"){
+    tracks=radarTracks.filter(track=>track.category==="BREAKOUT");
+  } else if(activeStatView==="TOP100"){
+    tracks=radarTracks.slice(0,100);
+  } else
+
   if(activeCountry==="TOP3"){
     tracks=top3Mix;
   } else if(activeCountry==="STREAM"){
@@ -530,6 +543,9 @@ function render(){
   const container=document.getElementById("tracks");
 
   document.getElementById("listTitle").textContent=
+    activeStatView==="HOT" ? "🔥 HOT NOW" :
+    activeStatView==="BREAKOUT" ? "🚀 BREAKOUT" :
+    activeStatView==="TOP100" ? "📡 TOP 100" :
     activeCountry==="ALL"
       ? "📡 TOP 50"
       : activeCountry==="TOP3"
@@ -692,8 +708,21 @@ document.querySelectorAll(".filter").forEach(button=>{
     button.classList.add("active");
 
     activeCountry=button.dataset.country;
+    activeStatView=null;
+    document.querySelectorAll(".statFilter").forEach(s=>s.classList.remove("active"));
 
     render();
+  });
+});
+
+document.querySelectorAll(".statFilter").forEach(stat=>{
+  stat.addEventListener("dblclick",()=>{
+    activeStatView=stat.dataset.view;
+    document.querySelectorAll(".statFilter").forEach(s=>s.classList.remove("active"));
+    stat.classList.add("active");
+    document.querySelectorAll(".filter").forEach(b=>b.classList.remove("active"));
+    render();
+    document.getElementById("tracks").scrollIntoView({behavior:"smooth",block:"start"});
   });
 });
 
