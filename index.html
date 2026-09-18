@@ -376,7 +376,7 @@ h1{
 
       <div>
         <h1>KINA RADAR</h1>
-        <div class="version">VERSION 16.9</div>
+        <div class="version">VERSION 17.0</div>
       </div>
     </div>
 
@@ -819,6 +819,7 @@ document.querySelectorAll(".filter").forEach(button=>{
 
     activeCountry=button.dataset.country;
     activeStatView=null;
+    if(activeCountry==="ULTRA3" && !ultratopHistoryTracks.length) loadUltratopHistory();
     
     document.querySelectorAll(".statFilter").forEach(s=>s.classList.remove("active"));
 
@@ -876,7 +877,6 @@ loadRadar();
 loadStreamingNow();
 loadGenreLists();
 loadCommercialDance();
-loadUltratopHistory();
 loadTrends();
 
 </script>
