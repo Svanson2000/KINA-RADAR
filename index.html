@@ -367,7 +367,7 @@ h1{
 
       <div>
         <h1>KINA RADAR</h1>
-        <div class="version">VERSION 15.8</div>
+        <div class="version">VERSION 15.9</div>
       </div>
     </div>
 
@@ -495,19 +495,24 @@ const escapeHtml=(value="")=>{
 async function playTrack(card,title,artist){
   const player=document.getElementById("kinaPlayer");
   const key=(title+"|"+artist).toLowerCase();
-  const oldCard=playingCard;
+  const sameCard=playingCard===card;
 
-  // Stop the current preview immediately so switching feels instant.
-  if(oldCard){
-    oldCard.classList.remove("playing");
+  // Same track while actually playing = stop. A paused/stopped track may start again.
+  if(sameCard && !player.paused){
     player.pause();
-    player.removeAttribute("src");
-    player.load();
+    player.currentTime=0;
+    card.classList.remove("playing");
     playingCard=null;
+    document.getElementById("playerBar").classList.remove("visible");
+    return;
   }
 
-  // Double-clicking the same playing track acts as stop.
-  if(oldCard===card)return;
+  // Always release the previous audio before switching tracks.
+  if(playingCard) playingCard.classList.remove("playing");
+  player.pause();
+  player.removeAttribute("src");
+  player.load();
+  playingCard=null;
 
   try{
     let url=previewCache.get(key);
@@ -524,20 +529,19 @@ async function playTrack(card,title,artist){
     }
     if(!url){card.animate([{opacity:1},{opacity:.45},{opacity:1}],{duration:350});return;}
 
-    // A newer double-click may have started while this lookup was loading.
-    if(playingCard&&playingCard!==card)return;
     player.src=url;
     playingCard=card;
+    card.classList.add("playing");
     document.getElementById("playerTitle").textContent=title;
     document.getElementById("playerArtist").textContent=artist;
     document.getElementById("playerBar").classList.add("visible");
     document.getElementById("pauseBtn").textContent="⏸";
-    card.classList.add("playing");
     await player.play();
     player.onended=()=>{
       if(playingCard===card){
         card.classList.remove("playing");
         playingCard=null;
+        document.getElementById("playerBar").classList.remove("visible");
       }
     };
   }catch(e){
@@ -561,9 +565,11 @@ document.getElementById("pauseBtn").addEventListener("click",()=>{
 });
 document.getElementById("stopBtn").addEventListener("click",()=>{
   const player=document.getElementById("kinaPlayer");
-  player.pause();player.currentTime=0;
+  player.pause();
   if(playingCard)playingCard.classList.remove("playing");
   playingCard=null;
+  player.removeAttribute("src");
+  player.load();
   document.getElementById("playerBar").classList.remove("visible");
   document.getElementById("pauseBtn").textContent="⏸";
 });
