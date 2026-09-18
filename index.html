@@ -4,6 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#07080b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="KINA RADAR">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icon-192.png">
 
 <title>KINA RADAR v14.0</title>
 
@@ -367,7 +372,7 @@ h1{
 
       <div>
         <h1>KINA RADAR</h1>
-        <div class="version">VERSION 16.0</div>
+        <div class="version">VERSION 16.1</div>
       </div>
     </div>
 
@@ -525,6 +530,16 @@ async function playTrack(card,title,artist){
   try{await p.play()}catch{}
   p.onended=()=>{if(token===playToken){card.classList.remove("playing");playingCard=null;document.getElementById("playerBar").classList.remove("visible")}};
 }
+let lastTap=0,lastTapCard=null;
+document.addEventListener("click",e=>{
+  const card=e.target.closest(".track");if(!card)return;
+  const now=Date.now();
+  if(lastTapCard===card&&now-lastTap<420){
+    e.preventDefault();lastTap=0;lastTapCard=null;
+    const title=card.querySelector(".title")?.textContent?.trim(),artist=card.querySelector(".artist")?.textContent?.trim();
+    if(title&&artist)playTrack(card,title,artist);
+  }else{lastTap=now;lastTapCard=card;}
+});
 document.addEventListener("dblclick",e=>{
   const card=e.target.closest(".track");if(!card)return;e.preventDefault();
   const title=card.querySelector(".title")?.textContent?.trim(),artist=card.querySelector(".artist")?.textContent?.trim();
