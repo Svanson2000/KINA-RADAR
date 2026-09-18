@@ -376,7 +376,7 @@ h1{
 
       <div>
         <h1>KINA RADAR</h1>
-        <div class="version">VERSION 16.4</div>
+        <div class="version">VERSION 16.5</div>
       </div>
     </div>
 
@@ -457,6 +457,10 @@ h1{
       🌍 AFRO TOP 10
     </button>
 
+    <button class="filter" data-country="COMDANCE">
+      💿 COMMERCIAL DANCE
+    </button>
+
   </div>
 
   <div class="sectionTitle">
@@ -491,6 +495,7 @@ let top3Mix=[];
 let streamingTracks=[];
 let edmTracks=[];
 let afroTracks=[];
+let commercialDanceTracks=[];
 const previewCache=new Map();
 let playingCard=null;
 let playlistCards=[];
@@ -624,6 +629,8 @@ function render(){
     tracks=edmTracks;
   } else if(activeCountry==="AFRO"){
     tracks=afroTracks;
+  } else if(activeCountry==="COMDANCE"){
+    tracks=commercialDanceTracks;
   } else if(activeCountry!=="ALL"){
     tracks=tracks.filter(track=>
       (track.countries||[]).includes(activeCountry)
@@ -646,7 +653,9 @@ function render(){
             ? "⚡ EDM WORLD TOP 10"
             : activeCountry==="AFRO"
               ? "🌍 AFRO / FRANCOPHONE TOP 10"
-              : `📡 ${activeCountry} RADAR`;
+              : activeCountry==="COMDANCE"
+                ? "💿 BEST COMMERCIAL DANCE • 12 MONTHS"
+                : `📡 ${activeCountry} RADAR`;
 
   if(!tracks.length){
     container.innerHTML=
@@ -831,11 +840,46 @@ function miniList(id,items){
   }).join("");
 }
 async function loadStreamingNow(){try{const r=await fetch("/.netlify/functions/streaming-now?ts="+Date.now(),{cache:"no-store"});const d=await r.json();streamingTracks=(d.tracks||[]).map(x=>({...x,score:0,category:"STREAMING",countries:["GLOBAL"]}));if(activeCountry==="STREAM")render();}catch(e){streamingTracks=[];if(activeCountry==="STREAM")render();}}
+async function loadCommercialDance(){
+  const seed=[
+    ["No Broke Boys","Disco Lines & Tinashe"],
+    ["Dior","MK feat. Chrystal"],
+    ["Blessings","Calvin Harris & Clementine Douglas"],
+    ["The Days","Chrystal"],
+    ["Somedays","Sonny Fodera, Jazzy & D.O.D"],
+    ["High On Me","Rossi. & Jazzy"],
+    ["Can't Decide","Max Dean, Locky & Luke Dean"],
+    ["Say My Name","Morgan Seatree"],
+    ["The Glen","Levi Heron"],
+    ["Tell Me","Sonny Fodera & Clementine Douglas"],
+    ["Ocean","Calvin Harris & Jessie Reyez"],
+    ["Kisses","BL3SS, CamrinWatsin & bbyclose"],
+    ["Waterfalls","James Hype, Bobby Harvey & Sam Harper"],
+    ["Cops & Robbers","Sammy Virji & Skepta"],
+    ["Back To Me","Rudimental & Jess Glynne"],
+    ["All This Time","Sonny Fodera & Jazzy"],
+    ["I Adore You","HUGEL, Topic & Arash"],
+    ["Make Me Feel","Oskar Med K"],
+    ["The Days (NOTION Remix)","Chrystal & NOTION"],
+    ["Movin' To The Sun","HUGEL, Imael Angel & Ultra Naté"]
+  ];
+  commercialDanceTracks=seed.map((x,i)=>({title:x[0],artist:x[1],score:100-i,category:"DANCE 12M",countries:["GLOBAL"]}));
+  const norm=s=>String(s||"").toLowerCase().replace(/[^a-z0-9]+/g," ");
+  await Promise.all(commercialDanceTracks.map(async t=>{
+    try{
+      const r=await fetch("https://itunes.apple.com/search?term="+encodeURIComponent(t.title+" "+t.artist)+"&entity=song&limit=3");
+      const d=await r.json(), hit=(d.results||[]).find(x=>norm(x.trackName).includes(norm(t.title))||norm(t.title).includes(norm(x.trackName)))||d.results?.[0];
+      if(hit){t.image=hit.artworkUrl100?.replace("100x100","300x300")||"";t.releaseDate=hit.releaseDate?.slice(0,10)||"";}
+    }catch{}
+  }));
+  if(activeCountry==="COMDANCE")render();
+}
 async function loadGenreLists(){const load=async(path)=>{try{const r=await fetch("/.netlify/functions/"+path+"?ts="+Date.now(),{cache:"no-store"});const d=await r.json();return d.tracks||[]}catch{return[]}};[edmTracks,afroTracks]=await Promise.all([load("edm-now"),load("afro-now")]);if(activeCountry==="EDM"||activeCountry==="AFRO")render();}
 async function loadTrends(){try{const r=await fetch("/.netlify/functions/trends?ts="+Date.now(),{cache:"no-store"});const d=await r.json();miniList("tiktok",d.tiktok);miniList("topradio",d.topradio);miniList("veronica",d.veronica);}catch(e){["tiktok","topradio","veronica"].forEach(id=>miniList(id,[]));}}
 loadRadar();
 loadStreamingNow();
 loadGenreLists();
+loadCommercialDance();
 loadTrends();
 
 </script>
