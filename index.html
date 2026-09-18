@@ -376,7 +376,7 @@ h1{
 
       <div>
         <h1>KINA RADAR</h1>
-        <div class="version">VERSION 16.6</div>
+        <div class="version">VERSION 16.7</div>
       </div>
     </div>
 
@@ -461,6 +461,10 @@ h1{
       💿 COMMERCIAL DANCE
     </button>
 
+    <button class="filter" data-country="ULTRA3">
+      🇧🇪 ULTRATOP TOP 3 • 2000→NU
+    </button>
+
   </div>
 
   <div class="sectionTitle">
@@ -496,6 +500,8 @@ let streamingTracks=[];
 let edmTracks=[];
 let afroTracks=[];
 let commercialDanceTracks=[];
+let ultratopHistoryTracks=[];
+let ultratopYear=new Date().getFullYear();
 const previewCache=new Map();
 let playingCard=null;
 let playlistCards=[];
@@ -631,6 +637,8 @@ function render(){
     tracks=afroTracks;
   } else if(activeCountry==="COMDANCE"){
     tracks=commercialDanceTracks;
+  } else if(activeCountry==="ULTRA3"){
+    tracks=ultratopHistoryTracks;
   } else if(activeCountry!=="ALL"){
     tracks=tracks.filter(track=>
       (track.countries||[]).includes(activeCountry)
@@ -655,7 +663,9 @@ function render(){
               ? "🌍 AFRO / FRANCOPHONE TOP 10"
               : activeCountry==="COMDANCE"
                 ? "💿 COMMERCIAL DANCE TOP 40 • TOP-5 ONLY"
-                : `📡 ${activeCountry} RADAR`;
+                : activeCountry==="ULTRA3"
+                  ? "🇧🇪 ULTRATOP TOP 3 • "+ultratopYear
+                  : `📡 ${activeCountry} RADAR`;
 
   if(!tracks.length){
     container.innerHTML=
@@ -806,6 +816,10 @@ document.querySelectorAll(".filter").forEach(button=>{
 
     activeCountry=button.dataset.country;
     activeStatView=null;
+    if(activeCountry==="ULTRA3"){
+      const y=prompt("Ultratop jaar (2000-"+new Date().getFullYear()+"):",String(ultratopYear));
+      const n=Number(y);if(n>=2000&&n<=new Date().getFullYear())loadUltratopHistory(n);
+    }
     document.querySelectorAll(".statFilter").forEach(s=>s.classList.remove("active"));
 
     render();
@@ -840,6 +854,15 @@ function miniList(id,items){
   }).join("");
 }
 async function loadStreamingNow(){try{const r=await fetch("/.netlify/functions/streaming-now?ts="+Date.now(),{cache:"no-store"});const d=await r.json();streamingTracks=(d.tracks||[]).map(x=>({...x,score:0,category:"STREAMING",countries:["GLOBAL"]}));if(activeCountry==="STREAM")render();}catch(e){streamingTracks=[];if(activeCountry==="STREAM")render();}}
+async function loadUltratopHistory(year=new Date().getFullYear()){
+  ultratopYear=year;
+  try{
+    const r=await fetch("/.netlify/functions/ultratop-history?year="+year,{cache:"force-cache"});
+    const d=await r.json();
+    ultratopHistoryTracks=(d.tracks||[]).map((x,i)=>({...x,score:x.best||0,category:"ULTRATOP #"+(x.best||3),countries:["BE"],releaseDate:String(x.date||"").slice(0,4)}));
+  }catch{ultratopHistoryTracks=[];}
+  if(activeCountry==="ULTRA3")render();
+}
 async function loadCommercialDance(){
   try{
     const r=await fetch("/.netlify/functions/commercial-dance?ts="+Date.now(),{cache:"no-store"});
@@ -854,6 +877,7 @@ loadRadar();
 loadStreamingNow();
 loadGenreLists();
 loadCommercialDance();
+loadUltratopHistory();
 loadTrends();
 
 </script>
