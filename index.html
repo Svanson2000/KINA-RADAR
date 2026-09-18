@@ -376,7 +376,7 @@ h1{
 
       <div>
         <h1>KINA RADAR</h1>
-        <div class="version">VERSION 17.8</div>
+        <div class="version">VERSION 17.9</div>
       </div>
     </div>
 
@@ -500,6 +500,7 @@ let edmTracks=[];
 let afroTracks=[];
 let commercialDanceTracks=[];
 let billboardDancePopTracks=[];
+const DANCE_POP_SEED=[["MOVIN' TO THE SUN","HUGEL, Imael Angel & Ultra Naté"],["MAGNETIC","Bausa"],["ON 2NITE","Silva Bumpa"],["JAMAICAN (BAM BAM)","HUGEL & SOLTO"],["SHINE","HUGEL, David Guetta, French Montana & Aidan Martin"],["TAKE ME BACK","Kygo & Max McNown"],["NEW RELIGION","Bebe Rexha & Faithless"],["SILVER LINES","ANOTR & Emily Warren"],["MEET ME IN THE DARK","AVE"],["HAPPINESS IS SO SAD","Swedish House Mafia & Lykke Li"],["TALK TO YOU","ANOTR & 54 Ultra"],["GOOD GIRL","Cloonee, Prospa & Tristan Henry"],["HUMAN","David Guetta, Third Party & John Martin"],["WO, MAN","Peggy Gou & Ayra Starr"],["EDGE OF DESIRE","Jonas Blue & Malive"],["MI CHICO","DJ Goja"],["SORRY PAPI","Topic & Becky G"],["WORLD AWAY","Gryffin, BUNT. & Inéz"],["TURN THE TIDE","Dimitri Vegas, Sylver & Pat B"],["MY PLACE","Josh Baker & Poppy Baskcomb"],["HEY EVERYBODY (BACK IN THE DANCE)","Kolter"],["SATISFY","Calvin Harris & Jazzy"],["BIZARRE","Madonna & Martin Garrix"],["REPEAT IT","Martin Garrix & Ed Sheeran"],["RMB (Ring My Bell)","Aitch"],["SAD GIRLS","Bebe Rexha & David Guetta"],["WHAT A LIFE","FISHER & Florence Arman"],["IN YOUR EYES","Alesso & OneRepublic"],["COME TO LIFE","Cassian & AR/CO"],["JUST THE WAY YOU ARE","Milky & Mall Grab"]].map((x,i)=>({position:i+1,title:x[0],artist:x[1],score:i+1,category:"GLOBAL DANCE",countries:["GLOBAL"]}));
 const previewCache=new Map();
 let playingCard=null;
 let playlistCards=[];
@@ -816,6 +817,7 @@ document.querySelectorAll(".filter").forEach(button=>{
 
     activeCountry=button.dataset.country;
     activeStatView=null;
+    if(activeCountry==="BBDANCE" && !billboardDancePopTracks.length) loadBillboardDancePop();
     
     document.querySelectorAll(".statFilter").forEach(s=>s.classList.remove("active"));
 
@@ -851,7 +853,18 @@ function miniList(id,items){
   }).join("");
 }
 async function loadStreamingNow(){try{const d=await cachedJSON("stream","/.netlify/functions/streaming-now");streamingTracks=(d.tracks||[]).map(x=>({...x,score:0,category:"STREAMING",countries:["GLOBAL"]}));if(activeCountry==="STREAM")render();}catch{streamingTracks=[];}}
-async function loadBillboardDancePop(){try{const d=await cachedJSON("global-dance-pop-v178","/.netlify/functions/billboard-dance-pop");billboardDancePopTracks=(d.tracks||[]).map(x=>({...x,score:x.position||0,category:"GLOBAL DANCE",countries:["US"]}));if(activeCountry==="BBDANCE")render();}catch{billboardDancePopTracks=[];}}
+async function loadBillboardDancePop(){
+  billboardDancePopTracks=DANCE_POP_SEED;
+  if(activeCountry==="BBDANCE")render();
+  try{
+    const d=await cachedJSON("global-dance-pop-v179","/.netlify/functions/billboard-dance-pop");
+    if((d.tracks||[]).length>=10){
+      billboardDancePopTracks=d.tracks.slice(0,30).map(x=>({...x,score:x.position||0,category:"GLOBAL DANCE",countries:["GLOBAL"]}));
+      cacheSet("global-dance-pop-v179",d);
+      if(activeCountry==="BBDANCE")render();
+    }
+  }catch{}
+}
 async function loadCommercialDance(){try{const d=await cachedJSON("dance","/.netlify/functions/commercial-dance");commercialDanceTracks=(d.tracks||[]).map((x,i)=>({...x,score:Math.max(61,100-i),category:"TOP 5 DANCE",countries:["UK DANCE"]}));if(activeCountry==="COMDANCE")render();}catch{commercialDanceTracks=[];}}
 async function loadGenreLists(){const load=async(path)=>{try{return (await cachedJSON(path,"/.netlify/functions/"+path)).tracks||[]}catch{return[]}};[edmTracks,afroTracks]=await Promise.all([load("edm-now"),load("afro-now")]);if(activeCountry==="EDM"||activeCountry==="AFRO")render();}
 async function loadTrends(){try{const d=await cachedJSON("trends","/.netlify/functions/trends");miniList("tiktok",d.tiktok);miniList("topradio",d.topradio);miniList("veronica",d.veronica);}catch{["tiktok","topradio","veronica"].forEach(id=>miniList(id,[]));}}
