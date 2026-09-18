@@ -358,7 +358,7 @@ h1{
 
       <div>
         <h1>KINA RADAR</h1>
-        <div class="version">VERSION 14.4</div>
+        <div class="version">VERSION 14.5</div>
       </div>
     </div>
 
@@ -442,7 +442,7 @@ h1{
 
 let radarTracks=[];
 let activeCountry="ALL";
-const TOP3_COUNTRIES=["BE","NL","FR","ES","IT"];
+let top3Mix=[];
 
 const escapeHtml=(value="")=>{
   return String(value)
@@ -471,17 +471,11 @@ function render(){
   let tracks=radarTracks;
 
   if(activeCountry==="TOP3"){
-    const picked=new Map();
-    TOP3_COUNTRIES.forEach(country=>{
-      radarTracks.filter(track=>(track.countries||[]).includes(country)).sort((a,b)=>(a.positions?.[country]??999)-(b.positions?.[country]??999)).slice(0,3).forEach(track=>{
-        const k=track.id || (String(track.title||"")+"|"+String(track.artist||""));
-        if(!picked.has(k))picked.set(k,{...track,top3Countries:[]});
-        picked.get(k).top3Countries.push(country);
-      });
-    });
-    tracks=[...picked.values()].sort((a,b)=>b.top3Countries.length-a.top3Countries.length||b.score-a.score);
+    tracks=top3Mix;
   } else if(activeCountry!=="ALL"){
-    tracks=tracks.filter(track=>(track.countries||[]).includes(activeCountry));
+    tracks=tracks.filter(track=>
+      (track.countries||[]).includes(activeCountry)
+    );
   }
 
   const container=document.getElementById("tracks");
@@ -489,7 +483,9 @@ function render(){
   document.getElementById("listTitle").textContent=
     activeCountry==="ALL"
       ? "📡 TOP 50"
-      : activeCountry==="TOP3" ? "🏆 TOP 3 × 5 LANDEN" : `📡 ${activeCountry} RADAR`;
+      : activeCountry==="TOP3"
+        ? "🏆 TOP 3 MIX"
+        : `📡 ${activeCountry} RADAR`;
 
   if(!tracks.length){
     container.innerHTML=
@@ -591,6 +587,7 @@ async function loadRadar(){
     }
 
     radarTracks=data.tracks||[];
+    top3Mix=data.top3Mix||[];
 
     document.getElementById("total").textContent=
       radarTracks.length;
